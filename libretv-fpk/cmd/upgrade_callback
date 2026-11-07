@@ -1,0 +1,78 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：升级后回调
+# 升级只替换 target 下的程序文件，var 目录（密码/STRM 配置/任务）由系统保留；
+# 这里补齐新增目录、修复权限，并确保升级后服务保持运行
+#
+# 密码处理原则（1.0.1 起）：
+# - 向导补填了密码 → 用 %q 安全转义后写入 var/env（旧版这里是裸 awk 写入，
+#   密码含空格/引号时会把 env 写坏，导致 source 失败、应用起不来）；
+# - 向导没填 → 完全不动已有配置。**不再生成随机密码**：旧版那样做会让用户在
+#   "升级向导没展示密码框"的场景下拿到一个只出现在安装日志里的随机密码，
+#   从此无法登录。没有密码就让应用进入「首次打开网页时自设密码」流程。
+
+VAR_DIR="${TRIM_PKGVAR}"
+APP_DIR="${TRIM_APPDEST}"
+RUN_USER="${TRIM_USERNAME:-libretv}"
+RUN_GROUP="${TRIM_GROUPNAME:-libretv}"
+ENV_FILE="${VAR_DIR}/env"
+
+# 兼容从旧版本升级：补齐 STRM 数据目录
+mkdir -p "${VAR_DIR}/strm" "${VAR_DIR}/strm/library"
+
+# 重写 env 中的 PASSWORD 行：保留其他行（如 STRM_DEFAULT_OUTPUT_DIR），
+# 密码用 %q 转义，cmd/main 里 `. "${ENV_FILE}"` 可无损还原
+write_password_line() {
+    local pw="$1"
+    local tmp="${ENV_FILE}.tmp.$$"
+    : > "${tmp}" || return 1
+    if [ -f "${ENV_FILE}" ]; then
+        while IFS= read -r line || [ -n "${line}" ]; do
+            case "${line}" in
+                PASSWORD=*) continue ;;
+            esac
+            printf '%s\n' "${line}" >> "${tmp}"
+        done < "${ENV_FILE}"
+    fi
+    printf 'PASSWORD=%q\n' "${pw}" >> "${tmp}" || { rm -f "${tmp}"; return 1; }
+    chmod 600 "${tmp}"
+    mv -f "${tmp}" "${ENV_FILE}"
+}
+
+WIZ_PW="${wizard_password:-${password:-${WIZARD_PASSWORD:-}}}"
+
+# 当前 env 里已有的密码（文件不存在时视为空）
+CURRENT_PW=""
+if [ -f "${ENV_FILE}" ]; then
+    # shellcheck disable=SC1090
+    . "${ENV_FILE}" 2>/dev/null
+    CURRENT_PW="${PASSWORD:-}"
+fi
+
+if [ -n "${WIZ_PW}" ]; then
+    # 向导补填/修改了密码
+    if [ "${WIZ_PW}" != "${CURRENT_PW}" ]; then
+        if write_password_line "${WIZ_PW}"; then
+            echo "访问密码已按升级向导更新" > "${TRIM_TEMP_LOGFILE}"
+        else
+            echo "访问密码写入失败，请重试或改用应用中心「设置 → 修改访问密码」" > "${TRIM_TEMP_LOGFILE}"
+        fi
+    fi
+elif [ ! -f "${ENV_FILE}" ]; then
+    # 连 env 都没有（极少见）：建一个空壳，让应用进入首次设置密码流程
+    {
+        echo "# 未预设访问密码：首次打开 LibreTV 网页时会引导你自行设置"
+    } > "${ENV_FILE}"
+    chmod 600 "${ENV_FILE}"
+fi
+# 向导没填且 env 已存在：保持原样（有密码继续用，没密码则首次打开时自设）
+
+if [ "$(id -u)" = "0" ]; then
+    chown -R "${RUN_USER}:${RUN_GROUP}" "${VAR_DIR}" 2>/dev/null
+    for nodebin in "${APP_DIR}/runtime/node-x64/bin/node" "${APP_DIR}/runtime/node-arm64/bin/node"; do
+        if [ -f "${nodebin}" ]; then
+            chmod 755 "${nodebin}" 2>/dev/null
+        fi
+    done
+fi
+
+exit 0

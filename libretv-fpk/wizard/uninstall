@@ -1,0 +1,17 @@
+[
+  {
+    "stepTitle": "卸载 LibreTV",
+    "items": [
+      {
+        "type": "tips",
+        "helpText": "<p>默认卸载会<b>保留</b>以下数据，以便重新安装后恢复：</p><ul><li>访问密码与应用配置</li><li>STRM 生成任务记录</li><li>共享目录 <b>libretv-strm</b> 中已生成的 .strm / .nfo / 海报文件</li></ul><p>如需彻底清除，请打开下方开关。</p>"
+      },
+      {
+        "type": "switch",
+        "field": "wizard_delete_data",
+        "label": "同时删除应用数据与已生成的 STRM 媒体库文件",
+        "initValue": "false"
+      }
+    ]
+  }
+]

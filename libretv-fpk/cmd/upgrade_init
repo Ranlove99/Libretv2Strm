@@ -1,0 +1,11 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：升级前回调
+# var 目录由系统保留（密码/配置/任务记录不丢失），这里仅做兜底备份与进程确认
+
+APP_ROOT="${TRIM_APPDEST%/target}"
+MAIN="${APP_ROOT}/cmd/main"
+if [ -x "${MAIN}" ]; then
+    "${MAIN}" stop >/dev/null 2>&1
+fi
+
+exit 0

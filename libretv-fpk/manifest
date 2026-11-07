@@ -1,0 +1,17 @@
+appname               = libretv
+version               = 1.1.0
+display_name          = LibreTV2Strm 媒体库
+desc                  = <p>LibreTV2Strm：在 LibreTV 基础上增加 <b>STRM 媒体库生成</b>——把采集站影片生成为 .strm / .nfo / 海报，直接对接飞牛影视、Emby、Jellyfin、Infuse。</p><p>支持多采集站聚合搜索、HLS 播放与广告过滤、直播源一键测活与屏蔽。本应用不内置任何点播源与直播源，需自行添加。</p>
+platform              = x86
+source                = thirdparty
+maintainer            = Libretv2Strm
+maintainer_url        = https://github.com/Ranlove99/Libretv2Strm
+distributor           = Libretv2Strm
+service_port          = 8099
+checkport             = true
+desktop_uidir         = ui
+desktop_applaunchname = libretv.main
+ctl_stop              = true
+install_type          =
+os_min_version        = 0.9.0
+changelog             = 1.1.0：首个公开版本，基于上游 LibreTV 2.21.1 —— STRM 媒体库生成（.strm/.nfo/海报，直链或本机中继两种取流模式，对接飞牛影视/Emby/Jellyfin/Infuse）；首次访问自设密码；播放器控制栏自动隐藏延迟可调；采集站直链默认；直播源一键测活与屏蔽、播放列表手动编辑；片头/中段/片尾跳过标记；倍速跨集保持；订阅自定义刷新周期；搜索季数精确匹配。本版本不内置任何点播源与直播源

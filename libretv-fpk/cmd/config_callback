@@ -1,0 +1,47 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：配置后回调（应用中心 → 设置 → 修改访问密码）
+# wizard 留空表示不修改密码；填写则原子替换 var/env 中的 PASSWORD 行并重启应用。
+#
+# 1.0.1 修复：旧版用 awk 裸写 `PASSWORD=<明文>`，密码里带空格、引号、反斜杠时
+# 会把 env 文件写坏——cmd/main 里 `. env` 报错、PASSWORD 变空，应用直接起不来。
+# 现在统一用 printf %q 转义，与 install_callback 保持一致。
+
+VAR_DIR="${TRIM_PKGVAR}"
+ENV_FILE="${VAR_DIR}/env"
+APP_ROOT="${TRIM_APPDEST%/target}"
+MAIN="${APP_ROOT}/cmd/main"
+
+# 重写 PASSWORD 行：保留其他行（如 STRM_DEFAULT_OUTPUT_DIR），%q 安全转义
+write_password_line() {
+    local pw="$1"
+    local tmp="${ENV_FILE}.tmp.$$"
+    : > "${tmp}" || return 1
+    if [ -f "${ENV_FILE}" ]; then
+        while IFS= read -r line || [ -n "${line}" ]; do
+            case "${line}" in
+                PASSWORD=*) continue ;;
+            esac
+            printf '%s\n' "${line}" >> "${tmp}"
+        done < "${ENV_FILE}"
+    fi
+    printf 'PASSWORD=%q\n' "${pw}" >> "${tmp}" || { rm -f "${tmp}"; return 1; }
+    chmod 600 "${tmp}"
+    mv -f "${tmp}" "${ENV_FILE}"
+}
+
+WIZ_PW="${wizard_password:-${password:-${WIZARD_PASSWORD:-}}}"
+if [ -n "${WIZ_PW}" ]; then
+    mkdir -p "${VAR_DIR}" 2>/dev/null
+    if ! write_password_line "${WIZ_PW}"; then
+        echo "访问密码更新失败，请重试" > "${TRIM_TEMP_LOGFILE}"
+        exit 1
+    fi
+fi
+
+# 重启应用使新密码生效；未运行时 start 会自动拉起
+if [ -x "${MAIN}" ]; then
+    "${MAIN}" stop >/dev/null 2>&1
+    "${MAIN}" start >/dev/null 2>&1
+fi
+
+exit 0

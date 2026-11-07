@@ -1,0 +1,22 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：卸载后回调
+# 默认保留 var（密码/配置/任务记录）与 shares（STRM 媒体库文件）；
+# 用户在卸载向导勾选 delete_data 时才彻底清除
+
+VAR_DIR="${TRIM_PKGVAR}"
+APP_ROOT="${TRIM_APPDEST%/target}"
+SHARE_DIR="${APP_ROOT}/shares/libretv-strm"
+
+# fnOS 把向导 field 名原样作为环境变量传入；兼容多种可能的变量名与取值形式
+DEL_FLAG="${wizard_delete_data:-${delete_data:-${WIZARD_DELETE_DATA:-}}}"
+if [ "${DEL_FLAG}" = "true" ] || [ "${DEL_FLAG}" = "1" ] || [ "${DEL_FLAG}" = "True" ]; then
+    # 防止变量为空时误删根目录
+    if [ -n "${VAR_DIR}" ] && [ -d "${VAR_DIR}" ]; then
+        rm -rf "${VAR_DIR:?}"/* 2>/dev/null
+    fi
+    if [ -n "${SHARE_DIR}" ] && [ -d "${SHARE_DIR}" ]; then
+        rm -rf "${SHARE_DIR:?}"/* 2>/dev/null
+    fi
+fi
+
+exit 0

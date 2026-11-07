@@ -1,0 +1,183 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：启停与状态检查
+# 约定：status 退出码 0=运行中，3=未运行；start/stop 成功 0，失败 1
+
+APP_DIR="${TRIM_APPDEST}/server"            # Next.js standalone 根目录
+RUNTIME_DIR="${TRIM_APPDEST}/runtime"       # 内置 Node.js 运行时
+VAR_DIR="${TRIM_PKGVAR}"
+PID_FILE="${VAR_DIR}/libretv.pid"
+LOG_FILE="${VAR_DIR}/libretv.log"
+ENV_FILE="${VAR_DIR}/env"                   # 安装向导写入的 PASSWORD 等
+PORT=8099
+
+log_msg() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') - $1" >> "${LOG_FILE}" 2>/dev/null
+}
+
+# 按架构选择内置 Node；双架构包由打包脚本各留一份
+node_bin() {
+    case "$(uname -m)" in
+        x86_64|amd64)  echo "${RUNTIME_DIR}/node-x64/bin/node" ;;
+        aarch64|arm64) echo "${RUNTIME_DIR}/node-arm64/bin/node" ;;
+        *)             echo "" ;;
+    esac
+}
+
+check_process() {
+    local pid=$1
+    if [ -n "${pid}" ] && kill -0 "${pid}" 2>/dev/null; then
+        return 0
+    fi
+    return 1
+}
+
+status() {
+    if [ -f "${PID_FILE}" ]; then
+        local pid
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if check_process "${pid}"; then
+            return 0
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 1
+}
+
+# 探测端口是否可连（bash /dev/tcp）
+port_ready() {
+    (exec 3<>"/dev/tcp/127.0.0.1/${PORT}") 2>/dev/null
+}
+
+start_process() {
+    if status; then
+        return 0
+    fi
+
+    local node
+    node=$(node_bin)
+    if [ -z "${node}" ] || [ ! -f "${node}" ]; then
+        echo "未找到适配 $(uname -m) 架构的 Node.js 运行时，请确认安装了对应架构的安装包" >> "${TRIM_TEMP_LOGFILE}"
+        return 1
+    fi
+    chmod +x "${node}" 2>/dev/null
+
+    mkdir -p "${VAR_DIR}" "${VAR_DIR}/strm" 2>/dev/null
+
+    # 读取安装向导写入的环境（PASSWORD 等）
+    local PASSWORD=""
+    if [ -r "${ENV_FILE}" ]; then
+        . "${ENV_FILE}"
+    fi
+    # 没有密码不再拒绝启动（旧版会 return 1，用户于是看到"应用无法启用"却不知为何）。
+    # 现在放行：前端检测到未设密码会直接弹出「设置访问密码」表单，
+    # 用户自己设一个即可，密码落在 ${VAR_DIR}/password.json，升级不丢。
+    if [ -z "${PASSWORD}" ]; then
+        log_msg "PASSWORD not configured; first-run password setup will be shown in the web UI"
+    fi
+
+    # STRM 默认输出目录优先级：
+    #   1. 安装向导显式选择（写入 env 文件的 STRM_DEFAULT_OUTPUT_DIR）
+    #   2. data-share 共享目录（媒体服务器可直接扫描）
+    #   3. 应用数据目录下的 library 子目录
+    local share_dir=""
+    # 优先读 env 文件中安装向导写入的目录
+    if [ -r "${ENV_FILE}" ] && grep -q '^STRM_DEFAULT_OUTPUT_DIR=' "${ENV_FILE}"; then
+        share_dir="$(grep '^STRM_DEFAULT_OUTPUT_DIR=' "${ENV_FILE}" | cut -d= -f2-)"
+        # bash %q 可能保留引号，需 eval 还原一次取真实路径
+        eval "share_dir=${share_dir}"
+    fi
+    # 未指定时自动探测共享目录
+    if [ -z "${share_dir}" ] || [ ! -d "${share_dir}" ]; then
+        share_dir=""
+        for cand in "/var/apps/libretv/shares/libretv-strm" "${TRIM_APPDEST%/target}/shares/libretv-strm"; do
+            if [ -d "${cand}" ] && [ -w "${cand}" ]; then
+                share_dir="${cand}"
+                break
+            fi
+        done
+    fi
+    if [ -z "${share_dir}" ]; then
+        share_dir="${VAR_DIR}/strm/library"
+    fi
+
+    # 本仓库不内置任何采集站与直播源：源全部由使用者自行添加，或由部署者通过
+    # DEFAULT_SOURCES / DEFAULT_LIVE_SOURCES 环境变量注入（见 README「预置源」）。
+    # 与上游 LibreTV 保持一致，不随包分发第三方采集接口地址。
+
+    log_msg "Starting LibreTV (node=${node}, port=${PORT}, strm-out=${share_dir}) ..."
+
+    cd "${APP_DIR}" || return 1
+    NODE_ENV=production \
+    NEXT_TELEMETRY_DISABLED=1 \
+    PORT="${PORT}" \
+    HOSTNAME=0.0.0.0 \
+    PASSWORD="${PASSWORD}" \
+    STRM_DATA_DIR="${VAR_DIR}/strm" \
+    STRM_DEFAULT_OUTPUT_DIR="${share_dir}" \
+    TRIM_PKGVAR="${VAR_DIR}" \
+    LIBRETV_DATA_DIR="${VAR_DIR}" \
+    nohup "${node}" server.js >> "${LOG_FILE}" 2>&1 &
+
+    printf "%s" "$!" > "${PID_FILE}"
+
+    # 等待端口就绪，最多 20s；进程提前退出视为启动失败
+    local count=0
+    while [ ${count} -lt 40 ]; do
+        if port_ready; then
+            log_msg "LibreTV ready on port ${PORT} (pid=$(cat "${PID_FILE}"))"
+            return 0
+        fi
+        if ! check_process "$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')"; then
+            log_msg "process exited unexpectedly"
+            echo "LibreTV 启动失败，请查看 ${LOG_FILE}" >> "${TRIM_TEMP_LOGFILE}"
+            rm -f "${PID_FILE}"
+            return 1
+        fi
+        sleep 0.5
+        count=$((count + 1))
+    done
+
+    log_msg "port not ready after 20s, but process is alive"
+    return 0
+}
+
+stop_process() {
+    log_msg "Stopping LibreTV ..."
+    if [ -r "${PID_FILE}" ]; then
+        local pid
+        pid=$(head -n 1 "${PID_FILE}" | tr -d '[:space:]')
+        if check_process "${pid}"; then
+            kill -TERM "${pid}" 2>/dev/null
+            local count=0
+            while check_process "${pid}" && [ ${count} -lt 20 ]; do
+                sleep 0.5
+                count=$((count + 1))
+            done
+            if check_process "${pid}"; then
+                kill -KILL "${pid}" 2>/dev/null
+                sleep 1
+            fi
+        fi
+        rm -f "${PID_FILE}"
+    fi
+    return 0
+}
+
+case $1 in
+start)
+    start_process
+    ;;
+stop)
+    stop_process
+    ;;
+status)
+    if status; then
+        exit 0
+    else
+        exit 3
+    fi
+    ;;
+*)
+    exit 1
+    ;;
+esac

@@ -1,0 +1,61 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：安装后回调
+# 1. 安装向导给了密码就写入 var/env；没给则**留空**，交给应用首次启动时自设
+# 2. 创建运行时数据目录（STRM 任务数据）
+# 3. 修正文件属主为应用用户，确保 cmd/main 以 package 用户身份可读写
+#
+# 历史坑（1.0 用户被锁在门外的直接原因）：
+# 旧版在拿不到向导密码时会生成一个随机 12 位密码写进 var/env，只往安装日志里
+# 报一次。而 fnOS 在「升级」「用户跳过向导」等场景下压根不展示密码输入框，
+# 于是用户既没见过密码、也进不去，只能干瞪眼。现在改成：没有密码就不设，
+# 让应用进入「首次打开 Web 界面时自行设置」流程——这条路对用户是可见的。
+
+VAR_DIR="${TRIM_PKGVAR}"
+ENV_FILE="${VAR_DIR}/env"
+APP_DIR="${TRIM_APPDEST}"
+RUN_USER="${TRIM_USERNAME:-libretv}"
+RUN_GROUP="${TRIM_GROUPNAME:-libretv}"
+
+mkdir -p "${VAR_DIR}" "${VAR_DIR}/strm" "${VAR_DIR}/strm/library"
+
+# 向导密码：fnOS 把向导 field 名原样作为环境变量传入（field=wizard_password）；
+# 兼容多种可能的变量名，避免安装因变量传递差异而失败
+WIZ_PW="${wizard_password:-${password:-${WIZARD_PASSWORD:-}}}"
+
+# 用 %q 安全转义写入，cmd/main 中 source 还原，防止密码含特殊字符/换行导致注入
+if [ -n "${WIZ_PW}" ]; then
+    printf 'PASSWORD=%q\n' "${WIZ_PW}" > "${ENV_FILE}"
+else
+    # 不写 PASSWORD：cmd/main 读到空密码时照常启动，前端会弹出「设置访问密码」。
+    # 这里只写注释，方便用户 SSH 排查时看懂这个文件为什么没有密码。
+    {
+        echo "# 未预设访问密码：首次打开 LibreTV 网页时会引导你自行设置"
+        echo "# 如需在此预设，可把下面这行的注释去掉并填入密码（注意保留单引号）："
+        echo "#PASSWORD=''"
+    } > "${ENV_FILE}"
+    echo "未从安装向导获取到密码，应用启动后请在网页中设置访问密码" > "${TRIM_TEMP_LOGFILE}"
+fi
+
+# STRM 输出目录：向导可选填，留空则由 cmd/main 自动选择 data-share 共享目录
+WIZ_OUT="${wizard_output_dir:-${output_dir:-${WIZARD_OUTPUT_DIR:-}}}"
+if [ -n "${WIZ_OUT}" ]; then
+    # 去除首尾空白与引号
+    WIZ_OUT="$(echo "${WIZ_OUT}" | sed "s/^[\"']//;s/[\"']$//;s/^[[:space:]]*//;s/[[:space:]]*$//")"
+    if [ -n "${WIZ_OUT}" ]; then
+        mkdir -p "${WIZ_OUT}" 2>/dev/null
+        printf 'STRM_DEFAULT_OUTPUT_DIR=%q\n' "${WIZ_OUT}" >> "${ENV_FILE}"
+    fi
+fi
+chmod 600 "${ENV_FILE}"
+
+# 内置 Node 运行时与 standalone 服务赋予应用用户权限（脚本可能以 root 运行）
+if [ "$(id -u)" = "0" ]; then
+    chown -R "${RUN_USER}:${RUN_GROUP}" "${VAR_DIR}" 2>/dev/null
+    for nodebin in "${APP_DIR}/runtime/node-x64/bin/node" "${APP_DIR}/runtime/node-arm64/bin/node"; do
+        if [ -f "${nodebin}" ]; then
+            chmod 755 "${nodebin}" 2>/dev/null
+        fi
+    done
+fi
+
+exit 0

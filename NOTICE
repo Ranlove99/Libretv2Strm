@@ -1,0 +1,72 @@
+Libretv2Strm
+============
+
+本仓库是 LibreTV 的修改版本（modified version），依 GNU Affero General Public
+License v3.0 第 5 条与第 13 条，在此声明来源与修改内容。
+
+上游作品
+--------
+
+  LibreTV
+  https://github.com/LibreSpark/LibreTV
+  版权所有 (C) LibreSpark 及 LibreTV 贡献者
+  许可证：GNU Affero General Public License v3.0
+
+本仓库基于上游 v2.21.1（commit 29cbeb3）。
+
+修改说明
+--------
+
+本仓库对上游做了以下修改（对应 AGPL-3.0 §5(a) 的"显著修改"声明）：
+
+1. 新增 STRM 媒体库生成功能
+   - src/lib/strm/：base-url、config、cms-catalog、generator、naming、nfo、
+     play、poster、sign、tasks、verify 等模块
+   - src/app/api/strm/：catalog、config、files、play、tasks 路由
+   - src/app/strm/、src/components/strm-*.tsx：媒体库页面与界面
+   - 支持直链与中继两种取流模式，m3u8 服务端重写，HMAC 签名鉴权
+
+2. 新增访问密码与首次设置流程
+   - src/lib/auth.ts、src/app/api/auth/setup/route.ts
+   - 密码持久化到 password.json（原子写、0600），支持应用中心重置
+
+3. 新增播放器控制栏自动隐藏延迟设置
+   - src/lib/control-hide.ts 及 store / player-shell / live-player /
+     source-manager 中的相关改动
+
+4. 新增直播源一键测活、频道屏蔽、播放列表手动编辑
+   - src/components/use-live-probe.ts、src/lib/live-channel-filter.ts
+   - src/components/live-channel-list.tsx、src/components/live-source-manager.tsx
+   - 相关 store 字段与界面改动
+
+5. 新增飞牛 fnOS 打包层
+   - libretv-fpk/：manifest、cmd 启停脚本、wizard 安装向导、ui、config
+   - scripts/pack-fpk.sh：ARM / x86 双架构 fpk 构建脚本
+
+6. 合入上游 2.19.6 → 2.21.1 的全部更新
+   - 片头/中段/片尾跳过标记（src/lib/skip-marks.ts、
+     src/components/skip-mark-panel.tsx）
+   - 倍速跨集保持、订阅自定义刷新周期、搜索季数精确匹配、窄屏控制条等
+
+7. 移除上游随包分发的第三方点播源与直播源
+   - libretv-fpk/cmd/main 不再注入 DEFAULT_SOURCES / DEFAULT_LIVE_SOURCES
+   - 源由使用者自行添加，或由部署者通过环境变量注入
+
+未修改的部分仍归上游版权人所有。完整源码见本仓库，获取方式与上游一致。
+
+对应源码
+--------
+
+AGPL-3.0 §13 要求的"对应源码"即本仓库全部内容：
+
+  https://github.com/Ranlove99/Libretv2Strm
+
+任何通过网络与本软件交互的用户，均可从上述地址获取完整源码。
+
+第三方内容
+----------
+
+本仓库不包含、不分发任何第三方采集站接口地址、直播源地址或其内容。
+使用者自行添加的源由各该站点自行负责。
+
+本软件以"现状"提供，不提供任何担保，包括但不限于对特定用途适用性的担保。

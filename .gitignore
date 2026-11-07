@@ -1,0 +1,32 @@
+# 依赖与构建产物
+node_modules/
+.next/
+out/
+*.tsbuildinfo
+next-env.d.ts
+
+# 运行时数据（密码、STRM 配置与任务、本地库）
+.data/
+*.db
+*.sqlite
+password.json
+strm/
+
+# 打包产物
+dist/
+*.fpk
+*.tgz
+.vendor/
+*.log
+
+# 本地环境
+.env
+.env.*
+!.env.example
+
+# 系统与编辑器
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

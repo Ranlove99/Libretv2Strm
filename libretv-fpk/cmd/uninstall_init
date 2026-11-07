@@ -1,0 +1,11 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：卸载前回调
+# 系统会在删除文件前调用；应用应已被停止，这里兜底确保进程结束
+
+APP_ROOT="${TRIM_APPDEST%/target}"
+MAIN="${APP_ROOT}/cmd/main"
+if [ -x "${MAIN}" ]; then
+    "${MAIN}" stop >/dev/null 2>&1
+fi
+
+exit 0

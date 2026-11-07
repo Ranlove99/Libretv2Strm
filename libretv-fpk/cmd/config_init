@@ -1,0 +1,4 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：配置前回调（用户在应用设置页修改访问密码）
+
+exit 0

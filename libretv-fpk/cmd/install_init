@@ -1,0 +1,10 @@
+#!/bin/bash
+# LibreTV fnOS 原生应用：安装前检查
+
+# 系统版本要求由 manifest os_min_version 保证，这里做基础环境检查
+if [ -z "${TRIM_PKGVAR}" ] || [ -z "${TRIM_APPDEST}" ]; then
+    echo "安装环境异常：缺少必要的系统路径变量" > "${TRIM_TEMP_LOGFILE:-/dev/null}"
+    exit 1
+fi
+
+exit 0

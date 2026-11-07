@@ -1,0 +1,19 @@
+[
+  {
+    "stepTitle": "修改访问密码",
+    "items": [
+      {
+        "type": "password",
+        "field": "wizard_password",
+        "label": "新的访问密码",
+        "rules": [
+          { "min": 4, "max": 64, "message": "密码长度需为 4-64 个字符" }
+        ]
+      },
+      {
+        "type": "tips",
+        "helpText": "<p>留空并保存则保持原密码不变。</p><p>保存后应用将自动重启，正在进行的 STRM 生成任务会中断，可在任务页面重试。</p>"
+      }
+    ]
+  }
+]
