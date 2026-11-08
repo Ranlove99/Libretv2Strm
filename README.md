@@ -66,9 +66,10 @@ LibreTV 是 Next.js 重写的影视聚合站，AGPL-3.0 开源。本项目是它
 
 ## 安装（飞牛 fnOS）
 
-1. 从 [Releases](https://github.com/Ranlove99/Libretv2Strm/releases) 下载对应架构的包：
-   - ARM（N100 之外的 ARM 机型、部分 RK3588 机型）：`libretv2strm-1.1.0-arm.fpk`
-   - x86（大多数 N100 / J4125 / 群晖虚拟机等）：`libretv2strm-1.1.0-x86.fpk`
+1. 从 [Releases](https://github.com/Ranlove99/Libretv2Strm/releases) 下载**最新版**对应架构的包（文件名形如 `libretv2strm-<版本>-<架构>.fpk`）：
+   - ARM（N100 之外的 ARM 机型、部分 RK3588 机型）：`...-arm.fpk`
+   - x86（大多数 N100 / J4125 / 群晖虚拟机等）：`...-x86.fpk`
+   - 下载后可用 Release 里的 `SHA256SUMS.txt` 核对：`shasum -a 256 -c SHA256SUMS.txt`
 2. fnOS → 应用中心 → 右上角「手动安装」，选择 fpk
 3. 安装向导里设置访问密码（**如果没看到这一步**，装完直接打开应用，首次进入会引导设置）
 4. 打开 `http://<NAS 地址>:8099` 登录
