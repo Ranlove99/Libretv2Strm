@@ -12,6 +12,7 @@ export type IconName =
   | 'refresh'
   | 'bolt'
   | 'download'
+  | 'upload'
   | 'chevronDown'
   | 'plus'
   | 'search'
@@ -58,6 +59,14 @@ const PATHS: Record<IconName, ReactNode> = {
       strokeLinejoin="round"
       strokeWidth={2}
       d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3"
+    />
+  ),
+  upload: (
+    <path
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth={2}
+      d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M7.5 7.5 12 3m0 0 4.5 4.5M12 3v13.5"
     />
   ),
   chevronDown: <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="m19.5 8.25-7.5 7.5-7.5-7.5" />,

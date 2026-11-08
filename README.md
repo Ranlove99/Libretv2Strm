@@ -58,6 +58,7 @@ LibreTV 是 Next.js 重写的影视聚合站，AGPL-3.0 开源。本项目是它
 ### 源管理
 
 - 多采集站聚合搜索，按「源 + vodId」去重
+- **点播源与直播源可分别从本地 JSON 文件导入**，按地址去重、只追加不接管已有源
 - 支持 TVBOX 多源配置导入（自动抽取其中的 CMS 接口）
 - 支持订阅链接（LibreTV SourceList JSON / 裸数组接口目录两种格式），可设自动刷新周期（1–365 天），打开站点时静默刷新，连续失败自动暂停
 
@@ -79,13 +80,29 @@ LibreTV 是 Next.js 重写的影视聚合站，AGPL-3.0 开源。本项目是它
 
 ## 添加源
 
-本仓库不附带任何第三方采集接口。三种添加方式：
+本仓库不附带任何第三方采集接口。四种添加方式：
 
 **1. 界面添加**：设置 → 点播源 → 新增，填 `https://example.com/api.php/provide/vod`
 
-**2. 订阅导入**：设置 → 点播源 → 订阅，粘贴 SourceList JSON 地址，或 TVBOX 多源配置地址
+**2. 从文件导入**（点播源与直播源分开）：设置 → 点播源 / 直播源 → 「从文件导入」，选一份本地 JSON。
 
-**3. 部署级预置**（自建部署 / 自行重打包 fpk 时）：
+- 点播源文件支持：LibreTV 源列表 `{sources:[{name,url}]}`、TVBOX 配置 `{sites:[...]}`、接口目录 `[{name,baseUrl}]`
+- 直播源文件支持：`{liveSources:[{name,url,epg}]}`，或裸数组 `[{name,url,epg}]`（直播面板里数组一律按直播源解释）
+- 两个面板各吃自己那一半：文件里还有另一种源时会提示你去对面面板再导一次，不会静默丢弃
+- 已存在的同地址源自动跳过；M3U **频道播放列表**不是源地址列表，会被拦下并提示先托管成 URL
+
+仓库里有两份可直接导入的示例清单（第三方地址，2026-11-07 实测，随时可能失效，仅作起点）：
+
+| 文件 | 内容 |
+| --- | --- |
+| [`presets/vod-sources.json`](presets/vod-sources.json) | 13 个点播源，Apple CMS 采集站 |
+| [`presets/live-sources.json`](presets/live-sources.json) | 4 个直播源，M3U 列表地址 |
+
+格式说明与自制方法见 [`presets/README.md`](presets/README.md)。
+
+**3. 订阅导入**：设置 → 点播源 → 订阅，粘贴 SourceList JSON 地址，或 TVBOX 多源配置地址
+
+**4. 部署级预置**（自建部署 / 自行重打包 fpk 时）：
 
 ```bash
 export DEFAULT_SOURCES='[
@@ -154,7 +171,9 @@ Libretv2Strm/
 │       └── lib/
 │           ├── strm/         STRM：base-url / generator / naming / nfo / poster / play / sign / tasks / verify
 │           ├── control-hide.ts  控制栏隐藏策略（单一来源）
+│           ├── source-file-import.ts  本地源文件解析（点播 / 直播分开）
 │           └── skip-marks.ts    片头片尾跳过标记
+├── presets/                  可直接导入的源清单示例（点播 / 直播各一份）
 ├── libretv-fpk/              fnOS 打包层
 │   ├── manifest              应用元数据（版本、端口、changelog）
 │   ├── cmd/                  启停脚本（main / install_callback / config_callback …）

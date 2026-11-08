@@ -41,11 +41,11 @@ rm -rf "${STAGE}" && mkdir -p "${STAGE}" "${OUT}"
 echo "0) 预检：版本号与构建产物里的功能标记"
 grep -q "\"version\": \"${VERSION}\"" "${LIB}/package.json" \
   || die "libretv/package.json 的 version 不是 ${VERSION}（改完记得重新 build，APP_VERSION 是构建时注入的）"
-for marker in 跳过标记 控制栏自动隐藏 自动刷新周期; do
+for marker in 跳过标记 控制栏自动隐藏 自动刷新周期 从文件导入; do
   grep -rq "${marker}" "${LIB}/.next/static" \
     || die "构建产物缺「${marker}」——很可能用了旧的 .next"
 done
-echo "   ✅ ${VERSION}，三项功能标记均在产物中"
+echo "   ✅ ${VERSION}，四项功能标记均在产物中"
 
 for ARCH in arm x86; do
   echo ""
@@ -149,9 +149,10 @@ PY
   grep -q "^version               = ${VERSION}$" "${META}/manifest" || die "manifest 版本不对"
   tar tzf "${META}/app.tgz" | grep -q 'server/.next' || die "app.tgz 缺 .next"
   grep -rq '跳过标记' "${APP}/server/.next/static" || die "包内缺「跳过标记」"
+  grep -rq '从文件导入' "${APP}/server/.next/static" || die "包内缺「从文件导入」"
   echo "   wizard/ ✅ $(ls "${META}/wizard" | tr '\n' ' ')"
   echo "   运行时 ✅ ${RUNTIME_DIR} (${NODE_MATCH})"
-  echo "   新功能 ✅ 跳过标记 / 控制栏自动隐藏 / 自动刷新周期"
+  echo "   新功能 ✅ 跳过标记 / 控制栏自动隐藏 / 自动刷新周期 / 从文件导入"
   ls -lh "${OUT}/${PKG}-${VERSION}-${ARCH}.fpk"
 done
 

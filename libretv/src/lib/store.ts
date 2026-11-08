@@ -272,6 +272,16 @@ interface AppState extends AppSettings {
   applySubscriptionLive: (subUrl: string, list: Omit<LiveSourceConfig, 'key'>[]) => number;
   setLiveEnvSources: (list: LiveSourceConfig[]) => void;
   addLiveSubscription: (url: string, name?: string, epg?: string) => void;
+  /**
+   * 从本地文件批量导入点播源（不接管已有源，只追加）。
+   * 按 URL 去重（含 env 预置源），返回新增与被跳过的重复数。
+   */
+  importCustomApis: (list: Omit<SourceConfig, 'key'>[]) => { added: number; duplicated: number };
+  /** 从本地文件批量导入直播源，按 URL 去重；返回新增与被跳过的重复数 */
+  importLiveSubscriptions: (list: Omit<LiveSourceConfig, 'key'>[]) => {
+    added: number;
+    duplicated: number;
+  };
   /** 删除直播源；返回被删快照供撤销，不存在时返回 null */
   removeLiveSubscription: (url: string) => RemovedLiveSnapshot | null;
   /** 撤销删除直播源（恢复条目与其启用状态） */
@@ -399,6 +409,33 @@ export const useAppStore = create<AppState>()(
           customAPIs: [...list, entry],
           selectedKeys: selectable ? [...get().selectedKeys, entry.key] : get().selectedKeys,
         });
+      },
+
+      // 文件导入：一次 set 完成，避免逐个 addCustomApi 触发 N 次持久化。
+      // 只追加、不接管：已有同 URL 的源（手动添加或 env 预置）保持原样，计入 duplicated。
+      importCustomApis: (list) => {
+        const seen = new Set(
+          [...get().customAPIs, ...get().envSources].map((a) => a.url.replace(/\/+$/, ''))
+        );
+        let apis = get().customAPIs;
+        const selected = [...get().selectedKeys];
+        let added = 0;
+        let duplicated = 0;
+        for (const item of list) {
+          const url = item.url.replace(/\/+$/, '');
+          if (seen.has(url)) {
+            duplicated += 1;
+            continue;
+          }
+          seen.add(url);
+          const entry: SourceConfig = { ...item, key: nextCustomKey(apis) };
+          apis = [...apis, entry];
+          // 与单条添加保持一致：成人源在过滤开启时不自动勾选
+          if (!(entry.isAdult && get().yellowFilter)) selected.push(entry.key);
+          added += 1;
+        }
+        if (added > 0) set({ customAPIs: apis, selectedKeys: selected });
+        return { added, duplicated };
       },
 
       updateCustomApi: (key, patch) => {
@@ -649,6 +686,31 @@ export const useAppStore = create<AppState>()(
           // 新添加的订阅默认启用
           liveSelectedUrls: [...new Set([...get().liveSelectedUrls, trimmed])],
         });
+      },
+
+      // 文件导入：手动添加的源无订阅归属（fromSubscriptions 为空），订阅同步不会接管
+      importLiveSubscriptions: (list) => {
+        const existing = new Set(get().liveSubscriptions.map((s) => s.url));
+        const subs = [...get().liveSubscriptions];
+        const selected = [...get().liveSelectedUrls];
+        let added = 0;
+        let duplicated = 0;
+        for (const item of list) {
+          const url = item.url.trim();
+          if (!url) continue;
+          if (existing.has(url)) {
+            duplicated += 1;
+            continue;
+          }
+          existing.add(url);
+          subs.push({ url, name: item.name, epg: item.epg, fromSubscriptions: [] });
+          selected.push(url);
+          added += 1;
+        }
+        if (added > 0) {
+          set({ liveSubscriptions: subs, liveSelectedUrls: [...new Set(selected)] });
+        }
+        return { added, duplicated };
       },
 
       removeLiveSubscription: (url) => {

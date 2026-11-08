@@ -1,0 +1,23 @@
+{
+  "name": "Libretv2Strm 示例直播源",
+  "description": "第三方 M3U 列表地址，社区维护，2026-11-07 实测可拉取。",
+  "liveSources": [
+    {
+      "name": "央卫视·IPv4",
+      "url": "https://cdn.jsdelivr.net/gh/vbskycn/iptv@master/tv/iptv4.m3u"
+    },
+    {
+      "name": "央视·卫视(aptv)",
+      "url": "https://cdn.jsdelivr.net/gh/Kimentanm/aptv@master/m3u/iptv.m3u"
+    },
+    {
+      "name": "北京联通IPTV(含节目单)",
+      "url": "https://cdn.jsdelivr.net/gh/YueChan/Live@main/IPTV.m3u",
+      "epg": "http://epg.51zmt.top:8000/e.xml"
+    },
+    {
+      "name": "IPTV-org 中国",
+      "url": "https://iptv-org.github.io/iptv/countries/cn.m3u"
+    }
+  ]
+}

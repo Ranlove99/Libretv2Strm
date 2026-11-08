@@ -591,3 +591,65 @@ describe('直播频道屏蔽 / 手工编辑 / 自定义顺序', () => {
     expect(store().liveChannelOrder).toEqual([C, A, B]);
   });
 });
+
+describe('文件导入：importCustomApis / importLiveSubscriptions', () => {
+  it('点播源：按 URL 去重（尾斜杠视为同一条），只追加不覆盖', () => {
+    store().addCustomApi({ name: '已有', url: 'https://a.example.com/api.php/provide/vod' });
+    const r = store().importCustomApis([
+      { name: '已有', url: 'https://a.example.com/api.php/provide/vod/' },
+      { name: '新增', url: 'https://b.example.com/api.php/provide/vod' },
+    ]);
+    expect(r).toEqual({ added: 1, duplicated: 1 });
+    expect(store().customAPIs).toHaveLength(2);
+    expect(store().customAPIs[0].name).toBe('已有');
+    expect(store().selectedKeys).toHaveLength(2);
+  });
+
+  it('点播源：与 env 预置源同地址也跳过', () => {
+    useAppStore.setState({
+      envSources: [
+        { key: 'env_0', name: 'env', url: 'https://env.example.com/api.php/provide/vod' },
+      ],
+    });
+    const r = store().importCustomApis([
+      { name: 'x', url: 'https://env.example.com/api.php/provide/vod' },
+    ]);
+    expect(r).toEqual({ added: 0, duplicated: 1 });
+    expect(store().customAPIs).toHaveLength(0);
+    useAppStore.setState({ envSources: [] });
+  });
+
+  it('点播源：成人源在过滤开启时不自动勾选', () => {
+    useAppStore.setState({ yellowFilter: true });
+    store().importCustomApis([
+      { name: 'adult', url: 'https://x.example.com/api.php/provide/vod', isAdult: true },
+    ]);
+    expect(store().customAPIs).toHaveLength(1);
+    expect(store().selectedKeys).toEqual([]);
+    useAppStore.setState({ yellowFilter: false });
+  });
+
+  it('直播源：按 URL 去重，新导入默认启用且无订阅归属', () => {
+    const r = store().importLiveSubscriptions([
+      { name: 'A', url: 'https://a.example.com/a.m3u' },
+      { name: 'A 重复', url: 'https://a.example.com/a.m3u' },
+      { name: 'B', url: 'https://b.example.com/b.m3u', epg: 'https://b.example.com/e.xml' },
+    ]);
+    expect(r).toEqual({ added: 2, duplicated: 1 });
+    expect(store().liveSubscriptions.map((s) => s.url)).toEqual([
+      'https://a.example.com/a.m3u',
+      'https://b.example.com/b.m3u',
+    ]);
+    expect(store().liveSubscriptions.every((s) => s.fromSubscriptions.length === 0)).toBe(true);
+    expect(store().liveSelectedUrls).toEqual([
+      'https://a.example.com/a.m3u',
+      'https://b.example.com/b.m3u',
+    ]);
+  });
+
+  it('直播源：空地址被忽略，不会产生空条目', () => {
+    const r = store().importLiveSubscriptions([{ name: '空地址', url: '   ' }]);
+    expect(r).toEqual({ added: 0, duplicated: 0 });
+    expect(store().liveSubscriptions).toHaveLength(0);
+  });
+});

@@ -6,6 +6,7 @@ import { ConfirmDialog } from './confirm-dialog';
 import { Dropdown, type DropdownOption } from './dropdown';
 import { Icon, type IconName } from './icon';
 import { LiveSourceManager } from './live-source-manager';
+import { SourceFileImportButton } from './source-file-import-button';
 import {
   HealthBadge,
   SearchInput,
@@ -288,10 +289,13 @@ function VodSourcesPanel() {
         title="点播源"
         hint={empty ? undefined : `共 ${all.length} 个 · 已启用 ${all.filter((s) => store.selectedKeys.includes(s.key)).length}`}
         extra={
-          <button className="btn-primary btn-sm" onClick={() => setEditing('__new__')}>
-            <Icon name="plus" className="w-3.5 h-3.5" />
-            添加 API
-          </button>
+          <div className="flex items-center gap-2">
+            <SourceFileImportButton kind="vod" />
+            <button className="btn-primary btn-sm" onClick={() => setEditing('__new__')}>
+              <Icon name="plus" className="w-3.5 h-3.5" />
+              添加 API
+            </button>
+          </div>
         }
       />
 
@@ -308,11 +312,14 @@ function VodSourcesPanel() {
         <EmptyState
           icon="link"
           title="还没有添加任何点播源"
-          description="添加一个 Apple CMS 采集站 API 即可开始搜索影片；也可到「数据源订阅」一次导入点播源与直播源"
+          description="添加一个 Apple CMS 采集站 API 即可开始搜索影片；也可以从文件导入，或到「数据源订阅」拉取远程列表"
           action={
-            <button className="btn-primary btn-sm" onClick={() => setEditing('__new__')}>
-              添加第一个点播源
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button className="btn-primary btn-sm" onClick={() => setEditing('__new__')}>
+                添加第一个点播源
+              </button>
+              <SourceFileImportButton kind="vod" />
+            </div>
           }
         />
       ) : (

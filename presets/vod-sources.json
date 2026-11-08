@@ -1,0 +1,58 @@
+{
+  "name": "Libretv2Strm 示例点播源",
+  "description": "第三方 Apple CMS 采集站，2026-11-07 实测可用。地址随时可能失效，导入后建议在设置里跑一次「批量测活」再启用。",
+  "sources": [
+    {
+      "name": "暴风资源",
+      "url": "https://bfzyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "非天资源",
+      "url": "https://cj.lziapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "最大资源",
+      "url": "https://api.zuidapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "虎牙资源",
+      "url": "https://www.huyaapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "极速资源",
+      "url": "https://jszyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "飘零资源",
+      "url": "https://p2100.net/api.php/provide/vod"
+    },
+    {
+      "name": "非凡资源",
+      "url": "https://cj.ffzyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "魔都资源",
+      "url": "https://www.mdzyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "电影天堂",
+      "url": "https://caiji.dyttzyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "360资源",
+      "url": "https://360zy.com/api.php/provide/vod"
+    },
+    {
+      "name": "iQIYI资源",
+      "url": "https://www.iqiyizyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "百度资源",
+      "url": "https://api.apibdzy.com/api.php/provide/vod"
+    },
+    {
+      "name": "猫眼资源",
+      "url": "https://api.maoyanapi.top/api.php/provide/vod"
+    }
+  ]
+}

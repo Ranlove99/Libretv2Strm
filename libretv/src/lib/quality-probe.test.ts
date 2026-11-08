@@ -184,7 +184,7 @@ function route(url: string): Response {
 let currentPlaylist = SINGLE_TS;
 
 function urls(): string[] {
-  return mocks.fetchUpstream.mock.calls.map((call) => call[0] as string);
+  return mocks.fetchUpstream.mock.calls.map((call: unknown[]) => call[0] as string);
 }
 
 describe('probeEpisodeOrder', () => {

@@ -181,7 +181,7 @@ describe('runDownloadJob · 源站缺片与存储错误', () => {
     await vi.advanceTimersByTimeAsync(10_000);
     await assertion;
 
-    const segCalls = fetchMock.mock.calls.filter(([input]) => String(input).endsWith('.ts'));
+    const segCalls = fetchMock.mock.calls.filter(([input]: unknown[]) => String(input).endsWith('.ts'));
     expect(segCalls).toHaveLength(3);
     vi.useRealTimers();
   });

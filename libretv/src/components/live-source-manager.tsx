@@ -8,6 +8,7 @@ import { formatRelativeTime, hostnameOf, validateSourceUrl, cn } from '@/lib/uti
 import { SearchInput, SectionTitle, TestBadge, useSourceTests } from './settings-shared';
 import { EmptyState } from './states';
 import { Icon } from './icon';
+import { SourceFileImportButton } from './source-file-import-button';
 
 /**
  * 直播源管理（嵌入设置抽屉）：M3U 订阅的添加 / 探活 / 移除 / 导出，
@@ -135,10 +136,13 @@ export function LiveSourceManager() {
         title="直播源"
         hint={empty ? 'M3U 订阅 · /live 页面播放' : `共 ${store.liveEnvSources.length + store.liveSubscriptions.length} 个 · 已启用 ${store.liveSelectedUrls.length}`}
         extra={
-          <button className="btn-primary btn-sm" onClick={() => setAdding(true)}>
-            <Icon name="plus" className="w-3.5 h-3.5" />
-            添加直播源
-          </button>
+          <div className="flex items-center gap-2">
+            <SourceFileImportButton kind="live" />
+            <button className="btn-primary btn-sm" onClick={() => setAdding(true)}>
+              <Icon name="plus" className="w-3.5 h-3.5" />
+              添加直播源
+            </button>
+          </div>
         }
       />
 
@@ -167,11 +171,14 @@ export function LiveSourceManager() {
         <EmptyState
           icon="link"
           title="还没有添加任何直播源"
-          description="添加 M3U 地址后即可在「直播」页按分组浏览与播放频道；也可在「数据源订阅」中一次导入点播源与直播源；部署者还可通过 DEFAULT_LIVE_SOURCES 环境变量预置。"
+          description="添加 M3U 地址后即可在「直播」页按分组浏览与播放频道；也可以从文件导入一份源列表，或到「数据源订阅」拉取远程列表。"
           action={
-            <button className="btn-primary btn-sm" onClick={() => setAdding(true)}>
-              添加第一个直播源
-            </button>
+            <div className="flex flex-wrap items-center justify-center gap-2">
+              <button className="btn-primary btn-sm" onClick={() => setAdding(true)}>
+                添加第一个直播源
+              </button>
+              <SourceFileImportButton kind="live" />
+            </div>
           }
         />
       ) : (
