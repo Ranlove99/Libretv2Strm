@@ -100,9 +100,19 @@ start_process() {
         share_dir="${VAR_DIR}/strm/library"
     fi
 
-    # 本仓库不内置任何采集站与直播源：源全部由使用者自行添加，或由部署者通过
-    # DEFAULT_SOURCES / DEFAULT_LIVE_SOURCES 环境变量注入（见 README「预置源」）。
-    # 与上游 LibreTV 保持一致，不随包分发第三方采集接口地址。
+    # 内置源：打包时 scripts/pack-fpk.sh 把 presets 展平为 server/builtin-*.json。
+    # 优先级：安装向导 env 文件里显式配置的 DEFAULT_* > 包内预置 > 空（用户自行添加）。
+    # 预置源由前端首次自动勾选/启用，装完即可搜索与播放；用户此后取消不会被反复勾回。
+    local EFFECTIVE_SOURCES="${DEFAULT_SOURCES:-}"
+    local EFFECTIVE_LIVE_SOURCES="${DEFAULT_LIVE_SOURCES:-}"
+    if [ -z "${EFFECTIVE_SOURCES}" ] && [ -r "${APP_DIR}/builtin-sources.json" ]; then
+        EFFECTIVE_SOURCES="$(cat "${APP_DIR}/builtin-sources.json")"
+        log_msg "builtin vod sources loaded from app package"
+    fi
+    if [ -z "${EFFECTIVE_LIVE_SOURCES}" ] && [ -r "${APP_DIR}/builtin-live-sources.json" ]; then
+        EFFECTIVE_LIVE_SOURCES="$(cat "${APP_DIR}/builtin-live-sources.json")"
+        log_msg "builtin live sources loaded from app package"
+    fi
 
     log_msg "Starting LibreTV (node=${node}, port=${PORT}, strm-out=${share_dir}) ..."
 
@@ -116,6 +126,8 @@ start_process() {
     STRM_DEFAULT_OUTPUT_DIR="${share_dir}" \
     TRIM_PKGVAR="${VAR_DIR}" \
     LIBRETV_DATA_DIR="${VAR_DIR}" \
+    DEFAULT_SOURCES="${EFFECTIVE_SOURCES}" \
+    DEFAULT_LIVE_SOURCES="${EFFECTIVE_LIVE_SOURCES}" \
     nohup "${node}" server.js >> "${LOG_FILE}" 2>&1 &
 
     printf "%s" "$!" > "${PID_FILE}"

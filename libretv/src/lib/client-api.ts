@@ -6,6 +6,7 @@ import type {
   CatalogVideo,
   StrmConfig,
   StrmFileEntry,
+  StrmRepairResult,
   StrmTask,
 } from './strm/types';
 
@@ -409,6 +410,14 @@ export const api = {
       entries: StrmFileEntry[];
       stats: { strmCount: number; totalSize: number };
     }>(`/api/strm/files?dir=${encodeURIComponent(dir)}`, { signal }),
+
+  /** 检查 / 修复输出目录里的 .strm 文件 */
+  repairStrmFiles: (body: { repair?: boolean; deep?: boolean; verify?: boolean; maxFiles?: number }) =>
+    request<StrmRepairResult>('/api/strm/files/repair', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
 };
 
 export interface SearchFailure {

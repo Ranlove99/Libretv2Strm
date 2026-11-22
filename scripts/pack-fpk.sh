@@ -41,11 +41,11 @@ rm -rf "${STAGE}" && mkdir -p "${STAGE}" "${OUT}"
 echo "0) 预检：版本号与构建产物里的功能标记"
 grep -q "\"version\": \"${VERSION}\"" "${LIB}/package.json" \
   || die "libretv/package.json 的 version 不是 ${VERSION}（改完记得重新 build，APP_VERSION 是构建时注入的）"
-for marker in 跳过标记 控制栏自动隐藏 自动刷新周期 从文件导入; do
+for marker in 跳过标记 控制栏自动隐藏 自动刷新周期 从文件导入 检查与修复; do
   grep -rq "${marker}" "${LIB}/.next/static" \
     || die "构建产物缺「${marker}」——很可能用了旧的 .next"
 done
-echo "   ✅ ${VERSION}，四项功能标记均在产物中"
+echo "   ✅ ${VERSION}，五项功能标记均在产物中"
 
 for ARCH in arm x86; do
   echo ""
@@ -75,6 +75,29 @@ for ARCH in arm x86; do
     cp -r "${LIB}/public" "${APP}/server/public"
   fi
   rsync -a --exclude='.cache' "${LIB}/.next/standalone/node_modules/" "${APP}/server/node_modules/"
+
+  echo "1b) 从 presets 生成内置源（裸数组 JSON，供 cmd/main 注入环境变量）"
+  python3 - "${ROOT}/presets/vod-sources.json" "${ROOT}/presets/live-sources.json" "${APP}/server" <<'PY'
+import json, os, sys
+vod, live, dest = sys.argv[1], sys.argv[2], sys.argv[3]
+def flatten(src, key, out, allowed):
+    with open(src, encoding='utf-8') as f:
+        data = json.load(f)
+    items = data.get(key)
+    if not isinstance(items, list) or not items:
+        raise SystemExit(f'{src} 的 {key} 为空或不是数组')
+    clean = []
+    for it in items:
+        row = {k: it[k] for k in allowed if it.get(k)}
+        if not row.get('name') or not row.get('url'):
+            raise SystemExit(f'{src} 中有条目缺 name/url')
+        clean.append(row)
+    with open(os.path.join(dest, out), 'w', encoding='utf-8') as f:
+        json.dump(clean, f, ensure_ascii=False, separators=(',', ':'))
+    print(f'   {out}: {len(clean)} 条')
+flatten(vod, 'sources', 'builtin-sources.json', ('name', 'url', 'detail', 'isAdult'))
+flatten(live, 'liveSources', 'builtin-live-sources.json', ('name', 'url', 'epg'))
+PY
 
   echo "2) 换成本架构 sharp 原生模块"
   rm -rf "${APP}/server/node_modules/@img/"sharp-darwin* \
@@ -150,9 +173,14 @@ PY
   tar tzf "${META}/app.tgz" | grep -q 'server/.next' || die "app.tgz 缺 .next"
   grep -rq '跳过标记' "${APP}/server/.next/static" || die "包内缺「跳过标记」"
   grep -rq '从文件导入' "${APP}/server/.next/static" || die "包内缺「从文件导入」"
+  grep -rq '检查与修复' "${APP}/server/.next/static" || die "包内缺「检查与修复」"
+  [ -s "${APP}/server/builtin-sources.json" ] || die "包内缺内置点播源"
+  [ -s "${APP}/server/builtin-live-sources.json" ] || die "包内缺内置直播源"
+  grep -q 'builtin-sources.json' "${META}/cmd/main" || die "cmd/main 缺内置源注入逻辑"
   echo "   wizard/ ✅ $(ls "${META}/wizard" | tr '\n' ' ')"
   echo "   运行时 ✅ ${RUNTIME_DIR} (${NODE_MATCH})"
-  echo "   新功能 ✅ 跳过标记 / 控制栏自动隐藏 / 自动刷新周期 / 从文件导入"
+  echo "   内置源 ✅ 点播 $(python3 -c "import json;print(len(json.load(open('${APP}/server/builtin-sources.json'))))") / 直播 $(python3 -c "import json;print(len(json.load(open('${APP}/server/builtin-live-sources.json'))))")"
+  echo "   新功能 ✅ 跳过标记 / 控制栏自动隐藏 / 自动刷新周期 / 从文件导入 / 检查与修复 / 内置源"
   ls -lh "${OUT}/${PKG}-${VERSION}-${ARCH}.fpk"
 done
 
