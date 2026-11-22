@@ -1,0 +1,82 @@
+{
+  "name": "Libretv2Strm 内置点播源",
+  "description": "2026-11-22 实测可用：API 可达且实拉 m3u8 成功（每源抽 3-6 条，任一可播即收）。已剔除 8 个播放地址全失效的源（暴风/虎牙/极速/猫眼/无尽/速博/新浪/闪电）。地址随时可能失效，建议定期跑批量测活。",
+  "sources": [
+    {
+      "name": "电影天堂",
+      "url": "http://caiji.dyttzyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "如意资源",
+      "url": "http://cj.rycjapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "非凡影视",
+      "url": "http://ffzy5.tv/api.php/provide/vod"
+    },
+    {
+      "name": "360资源",
+      "url": "https://360zy.com/api.php/provide/vod"
+    },
+    {
+      "name": "魔都资源",
+      "url": "https://www.mdzyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "最大资源",
+      "url": "https://api.zuidapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "ikun资源",
+      "url": "https://ikunzyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "量子资源",
+      "url": "https://cj.lziapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "天涯资源",
+      "url": "https://tyyszy.com/api.php/provide/vod"
+    },
+    {
+      "name": "百度资源",
+      "url": "https://api.apibdzy.com/api.php/provide/vod"
+    },
+    {
+      "name": "魔都资源(备用线)",
+      "url": "https://caiji.moduapi.cc/api.php/provide/vod"
+    },
+    {
+      "name": "iQIYI资源",
+      "url": "https://www.iqiyizyapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "红牛资源",
+      "url": "https://www.hongniuzy2.com/api.php/provide/vod"
+    },
+    {
+      "name": "U酷资源",
+      "url": "https://api.ukuapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "奥斯卡资源",
+      "url": "https://aosikazy.com/api.php/provide/vod"
+    },
+    {
+      "name": "牛牛资源",
+      "url": "https://api.niuniuzy.me/api.php/provide/vod"
+    },
+    {
+      "name": "丫丫资源",
+      "url": "https://cj.yayazy.net/api.php/provide/vod"
+    },
+    {
+      "name": "索尼资源",
+      "url": "https://suoniapi.com/api.php/provide/vod"
+    },
+    {
+      "name": "樱花资源",
+      "url": "https://m3u8.apiyhzy.com/api.php/provide/vod"
+    }
+  ]
+}

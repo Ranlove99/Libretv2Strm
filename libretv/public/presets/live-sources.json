@@ -1,0 +1,103 @@
+{
+  "name": "Libretv2Strm 示例直播源",
+  "description": "第三方 M3U 列表地址，社区维护，2026-11-21 实测可拉取。涵盖央卫视、地方台、海外频道与分类专题。",
+  "liveSources": [
+    {
+      "name": "央卫视·IPv4",
+      "url": "https://cdn.jsdelivr.net/gh/vbskycn/iptv@master/tv/iptv4.m3u"
+    },
+    {
+      "name": "央视·卫视(aptv)",
+      "url": "https://cdn.jsdelivr.net/gh/Kimentanm/aptv@master/m3u/iptv.m3u"
+    },
+    {
+      "name": "北京联通IPTV(含节目单)",
+      "url": "https://cdn.jsdelivr.net/gh/YueChan/Live@main/IPTV.m3u",
+      "epg": "http://epg.51zmt.top:8000/e.xml"
+    },
+    {
+      "name": "IPTV-org 中国",
+      "url": "https://iptv-org.github.io/iptv/countries/cn.m3u"
+    },
+    {
+      "name": "范明明·IPv6",
+      "url": "https://raw.githubusercontent.com/fanmingming/live/main/tv/m3u/ipv6.m3u"
+    },
+    {
+      "name": "YanG集合源",
+      "url": "https://raw.githubusercontent.com/YanG-1989/m3u/main/Gather.m3u"
+    },
+    {
+      "name": "zbefine直播",
+      "url": "https://raw.githubusercontent.com/zbefine/iptv/main/iptv.m3u"
+    },
+    {
+      "name": "ChinaIPTV自动更新",
+      "url": "https://raw.githubusercontent.com/hujingguang/ChinaIPTV/main/cnTV_AutoUpdate.m3u8"
+    },
+    {
+      "name": "BigBigGrandG集合",
+      "url": "https://raw.githubusercontent.com/BigBigGrandG/IPTV-URL/release/Gather.m3u"
+    },
+    {
+      "name": "epg.pw 大陆频道",
+      "url": "https://epg.pw/test_channels.m3u"
+    },
+    {
+      "name": "IPTV-org·全球汇总",
+      "url": "https://iptv-org.github.io/iptv/index.m3u"
+    },
+    {
+      "name": "IPTV-org·电影",
+      "url": "https://iptv-org.github.io/iptv/categories/movies.m3u"
+    },
+    {
+      "name": "IPTV-org·新闻",
+      "url": "https://iptv-org.github.io/iptv/categories/news.m3u"
+    },
+    {
+      "name": "IPTV-org·体育",
+      "url": "https://iptv-org.github.io/iptv/categories/sports.m3u"
+    },
+    {
+      "name": "IPTV-org·纪录",
+      "url": "https://iptv-org.github.io/iptv/categories/documentary.m3u"
+    },
+    {
+      "name": "IPTV-org·娱乐",
+      "url": "https://iptv-org.github.io/iptv/categories/entertainment.m3u"
+    },
+    {
+      "name": "IPTV-org·儿童",
+      "url": "https://iptv-org.github.io/iptv/categories/kids.m3u"
+    },
+    {
+      "name": "IPTV-org·音乐",
+      "url": "https://iptv-org.github.io/iptv/categories/music.m3u"
+    },
+    {
+      "name": "IPTV-org·美国",
+      "url": "https://iptv-org.github.io/iptv/countries/us.m3u"
+    },
+    {
+      "name": "IPTV-org·英国",
+      "url": "https://iptv-org.github.io/iptv/countries/uk.m3u"
+    },
+    {
+      "name": "IPTV-org·日本",
+      "url": "https://iptv-org.github.io/iptv/countries/jp.m3u"
+    },
+    {
+      "name": "IPTV-org·韩国",
+      "url": "https://iptv-org.github.io/iptv/countries/kr.m3u"
+    },
+    {
+      "name": "IPTV-org·中国香港",
+      "url": "https://iptv-org.github.io/iptv/countries/hk.m3u"
+    },
+    {
+      "name": "IPTV-org·中国台湾",
+      "url": "https://iptv-org.github.io/iptv/countries/tw.m3u"
+    }
+  ]
+}

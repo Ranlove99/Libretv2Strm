@@ -10,7 +10,8 @@ next-env.d.ts
 *.db
 *.sqlite
 password.json
-strm/
+# 仅忽略运行时数据目录里的 strm 配置/任务，避免连带忽略 src/lib/strm 源码
+.data/strm/
 
 # 打包产物
 dist/
