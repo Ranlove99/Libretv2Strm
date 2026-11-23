@@ -14,6 +14,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getStrmConfig, strmDataRoot } from './config';
 import { checkAndRepairStrm } from './repair';
+import { registerSources, recordSourceResult } from './source-stats';
 import { listTasks } from './tasks';
 import type { StrmJob, StrmJobFile, StrmJobStatus, StrmJobView, StrmRepairDetail } from './types';
 
@@ -270,6 +271,7 @@ function applyFileResult(job: StrmJob, entry: StrmJobFile, detail?: StrmRepairDe
   entry.issues = detail?.issues;
   entry.verify = detail?.verify;
   entry.verifyError = detail?.verifyError;
+  entry.deepSource = detail?.deepSource;
 
   if (!detail) {
     entry.state = 'ok';
@@ -327,15 +329,31 @@ export function startJob(job: StrmJob): Promise<void> {
       }
 
       const cfg = getStrmConfig();
-      await checkAndRepairStrm(cfg, listTasks(), {
+      const tasks = listTasks();
+      // 服务端源注册表兜底：任务记录里出现过的源全部登记（前端没上报过也有评分可用）
+      registerSources(
+        tasks.flatMap((t) =>
+          t.items.map((i) => ({ key: i.sourceKey, name: i.sourceName, url: i.sourceUrl }))
+        )
+      );
+      await checkAndRepairStrm(cfg, tasks, {
         repair: job.options.repair,
         deep: job.options.deep,
         verify: job.options.verify,
+        crossSource: cfg.crossSourceRepair,
         files: pending,
         concurrency: CHECK_CONCURRENCY,
         verifyRetries: VERIFY_RETRIES,
         verifyTimeoutMs: VERIFY_TIMEOUT_MS,
         signal: ctrl.signal,
+        // 每次源探测（拉详情 / 跨源尝试）都累计评分：成功率、延迟、连续失败
+        onSource: (info) => {
+          try {
+            recordSourceResult(info);
+          } catch {
+            // 评分记录失败不影响修复本身
+          }
+        },
         onStart: (file) => {
           // 只更新内存里的「正在处理」，不落盘：纯展示信息，丢了无所谓
           job.current = file;

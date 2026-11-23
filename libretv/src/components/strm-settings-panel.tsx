@@ -383,6 +383,12 @@ export function StrmSettingsPanel() {
           checked={form.autoFix}
           onChange={(v) => set('autoFix', v)}
         />
+        <Toggle
+          label="原源失效时改用高评分源替代"
+          desc="原源拉不到详情时，按下方源评分从高到低搜索同名影片，找回同一集并预检流地址后才写入"
+          checked={form.crossSourceRepair}
+          onChange={(v) => set('crossSourceRepair', v)}
+        />
 
         <div className="text-xs text-faint space-y-1">
           <div>
@@ -423,6 +429,8 @@ export function StrmSettingsPanel() {
         </p>
       </Section>
 
+      <SourceScoresSection />
+
       <button className="btn-primary" disabled={saving} onClick={() => void save()}>
         {saving ? <Spinner size="sm" /> : '保存设置'}
       </button>
@@ -438,6 +446,77 @@ function isRelayUrl(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+/**
+ * 源评分列表：数据来自服务端 sources.json（前端上报 + 修复 / 生成过程实测累计）。
+ * 分数 = 成功率 60 分 + 延迟 25 分 − 连续失败惩罚；从未测过的源为 50 分（中性）。
+ */
+function SourceScoresSection() {
+  const sourcesQuery = useQuery({
+    queryKey: ['strm-sources'],
+    queryFn: ({ signal }) => api.strmSources(signal as unknown as AbortSignal),
+    staleTime: 15 * 1000,
+  });
+  const sources = sourcesQuery.data?.sources ?? [];
+
+  return (
+    <Section title="源评分">
+      <p className="text-xs text-faint leading-relaxed">
+        每次拉详情、验证播放地址都会给对应源记一笔：成功率越高、响应越快分越高，连续失败会扣分。
+        检查修复时回源优先用原源，原源失效则按这里的分数从高到低找替代源。
+        打开本页面会自动把当前源列表同步到服务端（定时任务没有浏览器参与，靠这份注册表）。
+      </p>
+      {sourcesQuery.isLoading ? (
+        <div className="flex justify-center py-6">
+          <Spinner size="sm" />
+        </div>
+      ) : sources.length === 0 ? (
+        <p className="text-xs text-faint">还没有任何源记录：生成或检查一次后这里会出现评分。</p>
+      ) : (
+        <div className="rounded-md border border-line divide-y divide-line max-h-80 overflow-y-auto">
+          {sources.map((s) => (
+            <div key={s.url} className="flex items-center gap-3 px-3 py-2 text-sm">
+              <span
+                className={cn(
+                  'w-10 text-center text-xs font-medium rounded px-1.5 py-0.5 shrink-0',
+                  s.score >= 70
+                    ? 'bg-accent/10 text-accent'
+                    : s.score >= 40
+                      ? 'bg-warning/15 text-warning'
+                      : 'bg-danger/15 text-danger'
+                )}
+                title={`样本 ${s.samples} 条`}
+              >
+                {s.score}
+              </span>
+              <div className="flex-1 min-w-0">
+                <div className="truncate">{s.name}</div>
+                <div className="text-xs text-faint truncate font-mono">{s.url}</div>
+              </div>
+              <div className="text-xs text-faint text-right shrink-0 space-y-0.5">
+                <div>
+                  {s.successRate === undefined
+                    ? '未实测'
+                    : `成功率 ${s.successRate}%${s.avgMs !== undefined ? ` · ${formatLatency(s.avgMs)}` : ''}`}
+                </div>
+                {s.failStreak > 0 && (
+                  <div className="text-danger">连续失败 {s.failStreak} 次</div>
+                )}
+                {s.failStreak === 0 && s.lastOkAt && (
+                  <div>上次成功 {formatRelativeTime(s.lastOkAt)}</div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+function formatLatency(ms: number): string {
+  return ms >= 1000 ? `${(ms / 1000).toFixed(1)}s` : `${ms}ms`;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

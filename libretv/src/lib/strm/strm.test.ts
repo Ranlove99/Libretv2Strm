@@ -112,6 +112,7 @@ describe('writeGeneration 落盘', () => {
     autoCheckEveryDays: 1,
     autoCheckEveryHours: 6,
     autoFix: true,
+    crossSourceRepair: true,
   };
 
   beforeEach(() => {

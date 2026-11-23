@@ -5,6 +5,7 @@ import { fetchVodDetail } from './cms-catalog';
 import { planGeneration, writeGeneration } from './generator';
 import { downloadPoster } from './poster';
 import { verifyItemEpisodes } from './verify';
+import { recordSourceResult } from './source-stats';
 import { resolveStrmBaseUrl } from './base-url';
 import type { StrmConfig, StrmTask, StrmTaskItem } from './types';
 
@@ -243,6 +244,16 @@ async function processItem(
     // 有效性测试（开关控制）：逐集实际请求播放地址，结果写入明细
     if (config.verifyAfterGenerate) {
       await verifyItemEpisodes(item.episodes, config.outputDir, signal);
+      // 源评分：成功逐集计；失败整部片只计一次——
+      // 一部片后面几集失效很常见，逐集计会把好源砸成差源
+      for (const ep of item.episodes) {
+        if (ep.verify === 'ok') {
+          recordSourceResult({ url: item.sourceUrl, name: item.sourceName, ok: true });
+        }
+      }
+      if (item.episodes.some((ep) => ep.verify === 'fail')) {
+        recordSourceResult({ url: item.sourceUrl, name: item.sourceName, ok: false });
+      }
     }
   } catch (err) {
     if (signal.aborted) {

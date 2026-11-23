@@ -170,6 +170,7 @@ export function StrmRepairProgress({
                 {(d.issues ?? []).map((c) => ISSUE_LABELS[c] ?? c).join('、')}
                 {d.reason ? ` — ${d.reason}` : ''}
                 {d.verify === 'fail' && d.verifyError ? ` — 验证：${d.verifyError}` : ''}
+                {d.state === 'deep-fixed' && d.deepSource ? ` — 已改用源「${d.deepSource}」` : ''}
               </div>
             </li>
           ))}

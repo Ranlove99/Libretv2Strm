@@ -137,6 +137,26 @@ export async function fetchCatalogList(
   };
 }
 
+/** 关键词搜索：GET {base}?ac=videolist&wd={wd}（跨源替代修复用同一条上游约定） */
+export async function searchSourceVideos(
+  source: CmsSource,
+  wd: string,
+  signal?: AbortSignal
+): Promise<CatalogVideo[]> {
+  const verdict = await checkUpstreamAllowed(source.url);
+  if (!verdict.ok) throw new Error(verdict.reason);
+  const base = source.url.replace(/\/+$/, '');
+  const res = await fetchUpstream(
+    `${base}?ac=videolist&wd=${encodeURIComponent(wd)}`,
+    { timeoutMs: 10000, headers: cmsRequestHeaders(), signal }
+  );
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const data = (await res.json()) as { list?: unknown };
+  return Array.isArray(data.list)
+    ? data.list.map(toCatalogVideo).filter((x): x is CatalogVideo => x !== null)
+    : [];
+}
+
 /**
  * 影片详情：先走列表接口 ?ac=videolist&ids=，
  * 无播放地址时降级详情页 HTML 正则提取 m3u8（与 /api/detail 行为一致）。

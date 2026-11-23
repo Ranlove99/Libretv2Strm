@@ -104,6 +104,7 @@ function baseCfg(over: Partial<StrmConfig> = {}): StrmConfig {
     autoCheckEveryDays: 1,
     autoCheckEveryHours: 6,
     autoFix: true,
+    crossSourceRepair: true,
     ...over,
   };
 }

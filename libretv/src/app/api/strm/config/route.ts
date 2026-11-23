@@ -67,6 +67,7 @@ export async function POST(req: Request) {
       autoCheckEveryDays: typeof body.autoCheckEveryDays === 'number' ? body.autoCheckEveryDays : undefined,
       autoCheckEveryHours: typeof body.autoCheckEveryHours === 'number' ? body.autoCheckEveryHours : undefined,
       autoFix: typeof body.autoFix === 'boolean' ? body.autoFix : undefined,
+      crossSourceRepair: typeof body.crossSourceRepair === 'boolean' ? body.crossSourceRepair : undefined,
     });
     // 保存后立即验证输出目录可用性，失败早报错
     try {

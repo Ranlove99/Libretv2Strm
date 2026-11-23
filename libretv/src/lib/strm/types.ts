@@ -46,6 +46,11 @@ export interface StrmConfig {
   autoCheckEveryHours: number;
   /** 检查发现失效后自动回源重取地址（深度修复） */
   autoFix: boolean;
+  /**
+   * 深度修复时原源失败，改用评分更高的其他源搜索同名影片替换地址。
+   * 依赖服务端源注册表（前端上报 + 任务记录自动登记）。
+   */
+  crossSourceRepair: boolean;
 }
 
 /** 单集有效性测试结果：ok=可播放；fail=不可用（附原因）；skipped=未测试 */
@@ -169,6 +174,8 @@ export interface StrmRepairDetail {
   fixed?: boolean;
   /** 已做深度修复（回源重取地址） */
   deepFixed?: boolean;
+  /** 深度修复实际采用的源名（原源成功 = 原源名；跨源替代 = 新源名） */
+  deepSource?: string;
   /** 无法修复的原因 */
   reason?: string;
   verify?: StrmVerifyStatus;
@@ -258,6 +265,27 @@ export interface StrmJobBrief {
   current?: string;
 }
 
+/** 单个数据源的评分视图（sources.json + 实时计算） */
+export interface StrmSourceStatView {
+  /** 归一化后的源接口地址（唯一键） */
+  url: string;
+  name: string;
+  /** 0–100：成功率 60 + 延迟 25 − 连续失败惩罚；无样本时为 50 */
+  score: number;
+  ok: number;
+  fail: number;
+  /** 采样窗口内的总样本数 */
+  samples: number;
+  /** 成功率百分比（无样本时 undefined） */
+  successRate?: number;
+  /** 成功请求的平均耗时（毫秒） */
+  avgMs?: number;
+  /** 当前连续失败次数 */
+  failStreak: number;
+  lastOkAt?: number;
+  lastFailAt?: number;
+}
+
 /** 后台检查作业的状态 */
 export type StrmJobStatus = 'running' | 'paused' | 'done' | 'failed' | 'canceled';
 
@@ -269,6 +297,8 @@ export interface StrmJobFile {
   reason?: string;
   verify?: StrmVerifyStatus;
   verifyError?: string;
+  /** 深度修复实际采用的源名 */
+  deepSource?: string;
 }
 
 /**

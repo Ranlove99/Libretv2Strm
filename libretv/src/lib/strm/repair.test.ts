@@ -36,6 +36,7 @@ function cfg(outputDir: string, publicBaseUrl = 'http://192.168.1.10:8099'): Str
     autoCheckEveryDays: 1,
     autoCheckEveryHours: 6,
     autoFix: true,
+    crossSourceRepair: true,
   };
 }
 

@@ -60,6 +60,8 @@ export function defaultStrmConfig(): StrmConfig {
     autoCheckEveryDays: 1,
     autoCheckEveryHours: 6,
     autoFix: true,
+    // 原源失效时改用高评分源替代：默认开启，关掉则回到「只修原源」的旧行为
+    crossSourceRepair: true,
   };
 }
 
@@ -131,6 +133,7 @@ export function normalizeStrmConfig(input: Partial<StrmConfig>): StrmConfig {
   const hours = Number.parseInt(String(input.autoCheckEveryHours ?? ''), 10);
   c.autoCheckEveryHours = Number.isFinite(hours) ? Math.min(168, Math.max(1, hours)) : 6;
   c.autoFix = input.autoFix !== false;
+  c.crossSourceRepair = input.crossSourceRepair !== false;
   return c;
 }
 

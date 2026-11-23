@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { isRelayHost, lanBaseUrls, lanIpv4, resolveStrmBaseUrl } from './base-url';
 import { fetchVodDetail } from './cms-catalog';
+import { findReplacementEpisode } from './cross-source';
 import { strmContent } from './generator';
 import { signStrmUrl, verifyStrmUrl } from './sign';
 import { verifyStrmFile } from './verify';
@@ -209,6 +210,9 @@ export interface StrmFileOrigin {
   sourceName: string;
   sourceUrl: string;
   vodId: string;
+  /** 影片标题 / 年份：跨源替代修复靠它到其他源搜索同一部片 */
+  title: string;
+  year?: string;
   episodeIndex: number;
   episodeName: string;
 }
@@ -229,6 +233,8 @@ export function buildOriginIndex(tasks: StrmTask[]): Map<string, StrmFileOrigin>
           sourceName: item.sourceName,
           sourceUrl: item.sourceUrl,
           vodId: item.vodId,
+          title: item.title,
+          year: item.year,
           episodeIndex: index,
           episodeName: ep.name,
         });
@@ -245,22 +251,67 @@ async function atomicWrite(abs: string, content: string): Promise<void> {
   await fs.promises.rename(tmp, abs);
 }
 
-/** 深度修复单个文件：回源拉详情，按集序号/集名匹配新地址后重写 */
+/** 单个源探测的结果（供调用方累计源评分） */
+export interface SourceProbeInfo {
+  url: string;
+  name?: string;
+  ok: boolean;
+  ms?: number;
+}
+
+/**
+ * 深度修复单个文件：回源拉详情，按集序号/集名匹配新地址后重写。
+ * 原源失败时（crossSource 开启）改用评分更高的候选源搜索同名影片替代。
+ */
 async function deepRepairFile(
   abs: string,
   origin: StrmFileOrigin,
   ctx: RepairContext,
+  options: CheckRepairOptions,
   signal?: AbortSignal
-): Promise<{ ok: boolean; error?: string }> {
-  const detail = await fetchVodDetail(
-    { key: origin.sourceKey, name: origin.sourceName, url: origin.sourceUrl },
-    origin.vodId,
-    signal
-  );
-  const ep = detail.episodes[origin.episodeIndex] ?? detail.episodes.find((e) => e.name === origin.episodeName);
-  if (!ep) return { ok: false, error: '源站已无该集' };
-  await atomicWrite(abs, strmContent(ep.url, ctx.config, ctx.baseUrl));
-  return { ok: true };
+): Promise<{ ok: boolean; error?: string; sourceName?: string }> {
+  // 先试原源：同源的集序与集名是精确对应的，能修永远优先原源
+  const started = Date.now();
+  try {
+    const detail = await fetchVodDetail(
+      { key: origin.sourceKey, name: origin.sourceName, url: origin.sourceUrl },
+      origin.vodId,
+      signal
+    );
+    const ep = detail.episodes[origin.episodeIndex] ?? detail.episodes.find((e) => e.name === origin.episodeName);
+    if (ep) {
+      options.onSource?.({ url: origin.sourceUrl, name: origin.sourceName, ok: true, ms: Date.now() - started });
+      await atomicWrite(abs, strmContent(ep.url, ctx.config, ctx.baseUrl));
+      return { ok: true, sourceName: origin.sourceName };
+    }
+    // 原源能访问但没有这一集：接口本身是通的，不计失败
+    return { ok: false, error: '源站已无该集' };
+  } catch (err) {
+    options.onSource?.({ url: origin.sourceUrl, name: origin.sourceName, ok: false });
+    if (signal?.aborted) return { ok: false, error: '已取消' };
+
+    // 原源拉不到详情：改用高评分候选源替代（搜索同名影片 → 匹配同集 → 预检流地址）
+    const msg = err instanceof Error ? err.message : '未知错误';
+    if (!options.crossSource) {
+      return { ok: false, error: `原源失败（${msg}）` };
+    }
+    const hit = await findReplacementEpisode(
+      {
+        sourceUrl: origin.sourceUrl,
+        title: origin.title,
+        year: origin.year,
+        episodeIndex: origin.episodeIndex,
+        episodeName: origin.episodeName,
+      },
+      signal,
+      { record: (o) => options.onSource?.(o) }
+    );
+    if (hit) {
+      await atomicWrite(abs, strmContent(hit.url, ctx.config, ctx.baseUrl));
+      return { ok: true, sourceName: hit.sourceName };
+    }
+    return { ok: false, error: `原源失败（${msg}），候选源也未能替代` };
+  }
 }
 
 /** 单个文件处理完的回调载荷：detail 为空表示该文件正常、无需改动 */
@@ -295,6 +346,13 @@ export interface CheckRepairOptions {
   verifyRetries?: number;
   /** 单次验证超时（毫秒），批量检查可调小 */
   verifyTimeoutMs?: number;
+  /**
+   * 原源深度修复失败后，改用评分更高的其他源替代（需服务端源注册表）。
+   * 由配置 crossSourceRepair 控制默认值。
+   */
+  crossSource?: boolean;
+  /** 每次源探测（拉详情 / 跨源尝试）的结果回调，调用方累计源评分 */
+  onSource?: (info: SourceProbeInfo) => void;
 }
 
 /**
@@ -405,13 +463,15 @@ export async function checkAndRepairStrm(
       }
 
       // 深度修复：结构修不了，或验证失败时，按任务记录回源重取
+      let deepSourceName: string | undefined;
       if (options.deep && (fix.unfixable || verify === 'fail')) {
         const origin = originIndex.get(rel);
         if (origin) {
           try {
-            const dr = await deepRepairFile(abs, origin, ctx, options.signal);
+            const dr = await deepRepairFile(abs, origin, ctx, options, options.signal);
             if (dr.ok) {
               deepApplied = true;
+              deepSourceName = dr.sourceName;
               reason = undefined;
               if (options.verify) {
                 const vr2 = await verifyStrmFile(abs, options.signal, {
@@ -456,6 +516,7 @@ export async function checkAndRepairStrm(
           issues: fix.issues,
           fixed: written || undefined,
           deepFixed: deepApplied || undefined,
+          deepSource: deepSourceName,
           reason,
           verify,
           verifyError,

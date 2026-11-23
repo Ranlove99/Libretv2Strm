@@ -1,12 +1,14 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Header } from '@/components/header';
 import { StrmGeneratePanel } from '@/components/strm-generate-panel';
 import { StrmTasksPanel } from '@/components/strm-tasks-panel';
 import { StrmFilesPanel } from '@/components/strm-files-panel';
 import { StrmSettingsPanel } from '@/components/strm-settings-panel';
+import { api } from '@/lib/client-api';
+import { useAppStore } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
 type TabKey = 'generate' | 'tasks' | 'files' | 'settings';
@@ -29,6 +31,24 @@ export default function StrmPage() {
 function StrmContent() {
   const searchParams = useSearchParams();
   const [tab, setTab] = useState<TabKey>('generate');
+
+  // 把浏览器里的源列表（订阅 / 自定义 / 环境源）上报到服务端注册表：
+  // 跨源替代修复的候选池来自这里，定时任务没有浏览器参与也依赖它
+  const customAPIs = useAppStore((s) => s.customAPIs);
+  const envSources = useAppStore((s) => s.envSources);
+  const syncedSourcesRef = useRef('');
+  useEffect(() => {
+    const payload = [...customAPIs, ...envSources]
+      .map((s) => ({ key: s.key, name: s.name, url: s.url }))
+      .sort((a, b) => a.url.localeCompare(b.url));
+    const sig = JSON.stringify(payload);
+    if (!sig || sig === syncedSourcesRef.current) return;
+    syncedSourcesRef.current = sig;
+    api.syncStrmSources(payload).catch(() => {
+      // 上报失败静默：下次进入页面会重试；服务端还有任务记录兜底
+      syncedSourcesRef.current = '';
+    });
+  }, [customAPIs, envSources]);
 
   // 从详情页跳转带入的预选影片（?source=&id=&title=）
   const prefill =

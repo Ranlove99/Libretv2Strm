@@ -8,6 +8,7 @@ import type {
   StrmConfig,
   StrmFileEntry,
   StrmJobView,
+  StrmSourceStatView,
   StrmTask,
 } from './strm/types';
 
@@ -459,6 +460,24 @@ export const api = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action: 'run' }),
+      }
+    ),
+
+  /** 源评分列表（按分数降序） */
+  strmSources: (signal?: AbortSignal) =>
+    request<{ sources: StrmSourceStatView[]; now: number }>('/api/strm/sources', { signal }),
+
+  /**
+   * 上报当前源列表到服务端注册表（幂等）：跨源替代修复的候选池来自这里。
+   * 重复上报只补名称，评分统计不受影响。
+   */
+  syncStrmSources: (sources: Array<{ key?: string; name?: string; url: string }>) =>
+    request<{ ok: boolean; registered: number; added: number; sources: StrmSourceStatView[] }>(
+      '/api/strm/sources',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sources }),
       }
     ),
 };
