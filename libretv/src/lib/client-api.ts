@@ -7,6 +7,7 @@ import type {
   StrmAutoSummary,
   StrmConfig,
   StrmFileEntry,
+  StrmFolderRefreshResult,
   StrmJobView,
   StrmSourceStatView,
   StrmTask,
@@ -480,6 +481,19 @@ export const api = {
         body: JSON.stringify({ sources }),
       }
     ),
+
+  /** 文件夹级手动更新：用指定源重新抓取该文件夹对应的影片并覆盖 strm */
+  refreshStrmFolder: (body: {
+    dir: string;
+    sourceUrl: string;
+    sourceName?: string;
+    sourceKey?: string;
+  }) =>
+    request<StrmFolderRefreshResult>('/api/strm/files/refresh', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
 };
 
 export interface SearchFailure {

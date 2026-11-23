@@ -8,6 +8,7 @@ import { useToast } from '@/components/toast';
 import { Spinner, EmptyState } from '@/components/states';
 import { Icon } from '@/components/icon';
 import { StrmRepairProgress } from '@/components/strm-repair-progress';
+import { StrmFolderUpdateDialog } from '@/components/strm-folder-update-dialog';
 import { cn, formatNextRun, formatRelativeTime } from '@/lib/utils';
 
 /** 文件面板：浏览输出目录，统计 strm 数量与体积；检查并修复已生成的 strm */
@@ -152,6 +153,8 @@ function RepairSection({ onDone }: { onDone: () => void }) {
 export function StrmFilesPanel() {
   const { toast } = useToast();
   const [dir, setDir] = useState('');
+  /** 正在手动更新的文件夹（null = 对话框关闭） */
+  const [updateDir, setUpdateDir] = useState<string | null>(null);
 
   const filesQuery = useQuery({
     queryKey: ['strm-files', dir],
@@ -255,13 +258,23 @@ export function StrmFilesPanel() {
               {entries.map((e) => (
                 <li key={e.path}>
                   {e.isDir ? (
-                    <button
-                      className="w-full flex items-center gap-2 p-3 text-left hover:bg-hover transition-colors"
-                      onClick={() => enter(e.name)}
-                    >
-                      <Icon name="arrowDown" className="w-4 h-4 text-faint rotate-[-90deg]" />
-                      <span className="text-sm truncate flex-1">{e.name}</span>
-                    </button>
+                    <div className="flex items-center hover:bg-hover transition-colors group">
+                      <button
+                        className="flex-1 min-w-0 flex items-center gap-2 p-3 text-left"
+                        onClick={() => enter(e.name)}
+                      >
+                        <Icon name="arrowDown" className="w-4 h-4 text-faint rotate-[-90deg]" />
+                        <span className="text-sm truncate flex-1">{e.name}</span>
+                      </button>
+                      <button
+                        className="shrink-0 mr-3 btn-sm btn-secondary text-xs opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity"
+                        title="用指定源重新抓取这部剧并覆盖此文件夹里的 strm"
+                        onClick={() => setUpdateDir(e.path)}
+                      >
+                        <Icon name="refresh" />
+                        更新
+                      </button>
+                    </div>
                   ) : (
                     <div className="flex items-center gap-2 p-3">
                       <span
@@ -289,7 +302,14 @@ export function StrmFilesPanel() {
         提示：在 fnOS 自带的影视应用或 Emby / Jellyfin / Infuse 中，
         把上面这个目录添加为「电影 / 电视剧」媒体库即可播放；
         Infuse 与 Kodi 也可直接播放 .strm 指向的流地址。
+        某部剧大面积失效时，把鼠标移到文件夹上点「更新」，换一个源就地重新抓取。
       </p>
+
+      <StrmFolderUpdateDialog
+        dir={updateDir}
+        onClose={() => setUpdateDir(null)}
+        onDone={() => void filesQuery.refetch()}
+      />
     </div>
   );
 }

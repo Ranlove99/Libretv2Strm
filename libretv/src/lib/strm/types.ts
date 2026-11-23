@@ -265,8 +265,7 @@ export interface StrmJobBrief {
   current?: string;
 }
 
-/** 单个数据源的评分视图（sources.json + 实时计算） */
-export interface StrmSourceStatView {
+/** 单个数据源的评分视图（sources.json + 实时计算） */export interface StrmSourceStatView {
   /** 归一化后的源接口地址（唯一键） */
   url: string;
   name: string;
@@ -284,6 +283,30 @@ export interface StrmSourceStatView {
   failStreak: number;
   lastOkAt?: number;
   lastFailAt?: number;
+}
+
+/** 文件夹级手动更新的结果（/api/strm/files/refresh） */
+export interface StrmFolderRefreshResult {
+  ok: boolean;
+  /** 点击的文件夹（相对输出目录） */
+  dir: string;
+  /** 在所选源里匹配到的影片 */
+  matched?: {
+    vodId: string;
+    title: string;
+    year?: string;
+    kind: 'movie' | 'tv';
+    episodes: number;
+  };
+  /** 实际写入的媒体目录（源站标题/年份与文件夹不一致时会变） */
+  targetDir?: string;
+  /** 写入的 .strm 数量 */
+  written?: number;
+  /** 清理掉的旧 .strm 数量 */
+  removed?: number;
+  /** 搜到但没对上的相近标题，便于判断该换哪个源 */
+  candidates?: string[];
+  error?: string;
 }
 
 /** 后台检查作业的状态 */
