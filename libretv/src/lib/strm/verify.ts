@@ -60,7 +60,20 @@ export function normalizeVerifyUrl(url: string): string {
   return url;
 }
 
-export async function verifyStrmFile(absPath: string, signal?: AbortSignal): Promise<StrmVerifyResult> {
+export interface VerifyOptions {
+  /** 失败后的重试次数（默认 2；批量检查用 0，避免一个坏源拖慢整轮） */
+  retries?: number;
+  /** 单次请求超时（默认 20s；批量检查可调小） */
+  timeoutMs?: number;
+}
+
+export async function verifyStrmFile(
+  absPath: string,
+  signal?: AbortSignal,
+  opts: VerifyOptions = {}
+): Promise<StrmVerifyResult> {
+  const maxRetries = Math.max(0, opts.retries ?? VERIFY_MAX_RETRIES);
+  const timeoutMs = Math.max(1000, opts.timeoutMs ?? VERIFY_TIMEOUT_MS);
   let url: string;
   try {
     url = (await fs.promises.readFile(absPath, 'utf8')).trim();
@@ -75,14 +88,14 @@ export async function verifyStrmFile(absPath: string, signal?: AbortSignal): Pro
   url = normalizeVerifyUrl(url);
 
   let lastError: string | undefined;
-  for (let attempt = 0; attempt <= VERIFY_MAX_RETRIES; attempt++) {
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
     if (signal?.aborted) return { verify: 'skipped' };
     if (attempt > 0) {
       // 重试前等待指数退避
       await new Promise((r) => setTimeout(r, 1000 * attempt));
     }
     try {
-      const timeout = AbortSignal.timeout(VERIFY_TIMEOUT_MS);
+      const timeout = AbortSignal.timeout(timeoutMs);
       const res = await fetch(url, {
         signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
         redirect: 'follow',
@@ -113,7 +126,7 @@ export async function verifyStrmFile(absPath: string, signal?: AbortSignal): Pro
       if (signal?.aborted) return { verify: 'skipped' };
       lastError = err instanceof Error ? err.message : '请求失败';
       // ECONNRESET / ETIMEDOUT 等网络错误值得重试
-      if (attempt < VERIFY_MAX_RETRIES) continue;
+      if (attempt < maxRetries) continue;
     }
   }
   return { verify: 'fail', verifyError: lastError || '验证失败' };

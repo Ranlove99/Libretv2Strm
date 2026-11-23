@@ -61,6 +61,12 @@ export async function POST(req: Request) {
       concurrency: typeof body.concurrency === 'number' ? body.concurrency : undefined,
       maxEpisodes: typeof body.maxEpisodes === 'number' ? body.maxEpisodes : undefined,
       verifyAfterGenerate: typeof body.verifyAfterGenerate === 'boolean' ? body.verifyAfterGenerate : undefined,
+      autoCheck: typeof body.autoCheck === 'boolean' ? body.autoCheck : undefined,
+      autoCheckMode: body.autoCheckMode === 'daily' || body.autoCheckMode === 'interval' ? body.autoCheckMode : undefined,
+      autoCheckAt: typeof body.autoCheckAt === 'string' ? body.autoCheckAt : undefined,
+      autoCheckEveryDays: typeof body.autoCheckEveryDays === 'number' ? body.autoCheckEveryDays : undefined,
+      autoCheckEveryHours: typeof body.autoCheckEveryHours === 'number' ? body.autoCheckEveryHours : undefined,
+      autoFix: typeof body.autoFix === 'boolean' ? body.autoFix : undefined,
     });
     // 保存后立即验证输出目录可用性，失败早报错
     try {

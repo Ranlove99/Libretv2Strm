@@ -263,6 +263,12 @@ async function deepRepairFile(
   return { ok: true };
 }
 
+/** 单个文件处理完的回调载荷：detail 为空表示该文件正常、无需改动 */
+export interface StrmFileProgress {
+  file: string;
+  detail?: StrmRepairDetail;
+}
+
 export interface CheckRepairOptions {
   /** 做结构修复（false = 只读检查） */
   repair?: boolean;
@@ -273,6 +279,22 @@ export interface CheckRepairOptions {
   maxFiles?: number;
   concurrency?: number;
   signal?: AbortSignal;
+  /**
+   * 只处理这些相对路径（后台作业续跑用：已完成的不再重复处理）。
+   * 不传则扫描整个输出目录。
+   */
+  files?: string[];
+  /** 每处理完一个文件回调一次，供后台作业累计进度 */
+  onFile?: (info: StrmFileProgress) => void;
+  /** 开始处理某个文件时回调（进度面板显示「正在处理」） */
+  onStart?: (file: string) => void;
+  /**
+   * 验证失败后的重试次数。批量检查传 0：一个失效源重试三次要 60 秒，
+   * 几百个文件会把一轮检查拖到几小时。
+   */
+  verifyRetries?: number;
+  /** 单次验证超时（毫秒），批量检查可调小 */
+  verifyTimeoutMs?: number;
 }
 
 /**
@@ -289,7 +311,12 @@ export async function checkAndRepairStrm(
   // 代理文件需要对外地址；配置为空时退回本机局域网地址（媒体服务器通常同局域网）
   const baseUrl = resolved.baseUrl || lanBaseUrls()[0] || '';
 
-  const { files, truncated } = await collectStrmFiles(root, options.maxFiles ?? DEFAULT_MAX_FILES);
+  // 传了 files 说明是后台作业续跑：只处理未完成的那些，不再扫目录
+  const scanned = options.files
+    ? { files: options.files, truncated: false }
+    : await collectStrmFiles(root, options.maxFiles ?? DEFAULT_MAX_FILES);
+  const files = scanned.files;
+  const truncated = scanned.truncated;
   const originIndex = options.deep ? buildOriginIndex(tasks) : new Map<string, StrmFileOrigin>();
   const details: StrmRepairDetail[] = [];
 
@@ -304,22 +331,50 @@ export async function checkAndRepairStrm(
   let cursor = 0;
   const concurrency = Math.min(8, Math.max(1, options.concurrency ?? DEFAULT_CONCURRENCY));
 
+  /** 单个文件结算：回调给作业层（detail 为空 = 正常），异常不外溢 */
+  const emit = (file: string, detail?: StrmRepairDetail): void => {
+    if (!options.onFile) return;
+    try {
+      options.onFile({ file, detail });
+    } catch {
+      // 进度回调出错不影响检查本身
+    }
+  };
+
   const worker = async (): Promise<void> => {
     while (cursor < files.length) {
       if (options.signal?.aborted) return;
       const rel = files[cursor];
       cursor += 1;
+      try {
+        options.onStart?.(rel);
+      } catch {
+        // 进度回调出错不影响检查
+      }
 
       const abs = path.resolve(root, rel);
       // 防目录逃逸
-      if (abs !== root && !abs.startsWith(root + path.sep)) continue;
+      if (abs !== root && !abs.startsWith(root + path.sep)) {
+        const detail: StrmRepairDetail = { file: rel, kind: 'invalid', issues: ['unreadable'], reason: '路径越界' };
+        unfixable += 1;
+        if (details.length < MAX_DETAILS) details.push(detail);
+        emit(rel, detail);
+        continue;
+      }
 
       let raw: string;
       try {
         raw = await fs.promises.readFile(abs, 'utf8');
       } catch {
+        const detail: StrmRepairDetail = {
+          file: rel,
+          kind: 'invalid',
+          issues: ['unreadable'],
+          reason: '文件读取失败',
+        };
         unfixable += 1;
-        details.push({ file: rel, kind: 'invalid', issues: ['unreadable'], reason: '文件读取失败' });
+        if (details.length < MAX_DETAILS) details.push(detail);
+        emit(rel, detail);
         continue;
       }
 
@@ -341,7 +396,10 @@ export async function checkAndRepairStrm(
       let verify: StrmVerifyStatus | undefined;
       let verifyError: string | undefined;
       if (options.verify && !fix.unfixable) {
-        const vr = await verifyStrmFile(abs, options.signal);
+        const vr = await verifyStrmFile(abs, options.signal, {
+          retries: options.verifyRetries,
+          timeoutMs: options.verifyTimeoutMs,
+        });
         verify = vr.verify;
         verifyError = vr.verifyError;
       }
@@ -356,7 +414,10 @@ export async function checkAndRepairStrm(
               deepApplied = true;
               reason = undefined;
               if (options.verify) {
-                const vr2 = await verifyStrmFile(abs, options.signal);
+                const vr2 = await verifyStrmFile(abs, options.signal, {
+                  retries: options.verifyRetries,
+                  timeoutMs: options.verifyTimeoutMs,
+                });
                 verify = vr2.verify;
                 verifyError = vr2.verifyError;
               }
@@ -371,6 +432,10 @@ export async function checkAndRepairStrm(
         }
       }
 
+      // 暂停 / 取消时正在处理的结果作废：不计数、不回调，
+      // 续跑时这些文件仍是 pending（否则会被误算成「正常」）
+      if (options.signal?.aborted) return;
+
       const stillBroken = !!fix.unfixable && !deepApplied;
       // 归类：每个文件只落入一个桶，避免「可修未改」又被算成「正常」
       if (deepApplied) deepFixed += 1;
@@ -383,8 +448,9 @@ export async function checkAndRepairStrm(
       if (verify === 'fail') verifyFailed += 1;
 
       const hasIssue = fix.issues.length > 0 || !!fix.unfixable || deepApplied || verify === 'fail';
-      if (hasIssue && details.length < MAX_DETAILS) {
-        details.push({
+      let detail: StrmRepairDetail | undefined;
+      if (hasIssue) {
+        detail = {
           file: rel,
           kind: fix.kind,
           issues: fix.issues,
@@ -393,8 +459,10 @@ export async function checkAndRepairStrm(
           reason,
           verify,
           verifyError,
-        });
+        };
+        if (details.length < MAX_DETAILS) details.push(detail);
       }
+      emit(rel, detail);
     }
   };
 

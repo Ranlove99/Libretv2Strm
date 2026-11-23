@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 import { useToast } from '@/components/toast';
 import { Spinner } from '@/components/states';
-import { cn } from '@/lib/utils';
+import { StrmRepairProgress } from '@/components/strm-repair-progress';
+import { cn, formatNextRun, formatRelativeTime } from '@/lib/utils';
 import type { StrmConfig } from '@/lib/strm/types';
 
-/** 设置面板：输出目录 / URL 模式 / 命名模板 / NFO 与海报开关 */
+/** 设置面板：输出目录 / URL 模式 / 命名模板 / NFO 与海报开关 / 定时检查与修复 */
 
 export function StrmSettingsPanel() {
   const { toast } = useToast();
@@ -18,8 +19,32 @@ export function StrmSettingsPanel() {
     staleTime: 30 * 1000,
   });
 
+  // 定时任务配置摘要（下次执行 / 上次结果）
+  const autoQuery = useQuery({
+    queryKey: ['strm-auto'],
+    queryFn: ({ signal }) => api.strmAuto(signal as unknown as AbortSignal),
+    staleTime: 30 * 1000,
+  });
+  const auto = autoQuery.data;
+
+  // 正在执行的作业：有进度时每 1.5 秒刷新，跑完自动停下
+  const jobsQuery = useQuery({
+    queryKey: ['strm-jobs'],
+    queryFn: ({ signal }) => api.strmJobs(signal as unknown as AbortSignal),
+    refetchInterval: (query) => (query.state.data?.active ? 1500 : false),
+  });
+  const activeJob = jobsQuery.data?.active ?? null;
+
+  // 作业跑完时刷新一次定时摘要（「上次执行」文案来自作业结果）
+  const prevActiveId = useRef<string | null>(null);
+  useEffect(() => {
+    if (prevActiveId.current && !activeJob) void autoQuery.refetch();
+    prevActiveId.current = activeJob?.id ?? null;
+  }, [activeJob, autoQuery]);
+
   const [form, setForm] = useState<StrmConfig | null>(null);
   const [saving, setSaving] = useState(false);
+  const [autoRunning, setAutoRunning] = useState(false);
 
   useEffect(() => {
     if (configQuery.data && !form) {
@@ -51,6 +76,8 @@ export function StrmSettingsPanel() {
     try {
       const res = await api.saveStrmConfig(form as unknown as Record<string, unknown>);
       await configQuery.refetch();
+      // 频率改了，下次执行时间要跟着重算
+      void autoQuery.refetch();
       // 服务端纠正了对外地址（如中继域名 → 局域网地址）时，把原因讲清楚
       if (res?.warning) toast(res.warning, 'error');
       else toast('设置已保存', 'success');
@@ -62,6 +89,23 @@ export function StrmSettingsPanel() {
   };
 
   const data = configQuery.data;
+
+  /** 立即按自动任务的方式跑一次：先落盘当前表单，定时任务读的是服务端配置 */
+  const runAutoNow = async () => {
+    const current = form;
+    if (!current) return;
+    setAutoRunning(true);
+    try {
+      await api.saveStrmConfig(current as unknown as Record<string, unknown>);
+      const r = await api.runStrmAuto();
+      await Promise.all([autoQuery.refetch(), jobsQuery.refetch()]);
+      toast(r.reason, r.started ? 'success' : 'error');
+    } catch (err) {
+      toast(err instanceof Error ? err.message : '执行失败', 'error');
+    } finally {
+      setAutoRunning(false);
+    }
+  };
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -259,6 +303,124 @@ export function StrmSettingsPanel() {
             onChange={(e) => set('maxEpisodes', Number.parseInt(e.target.value, 10) || 0)}
           />
         </Field>
+      </Section>
+
+      <Section title="自动检查与修复">
+        <Toggle
+          label="每天定时检查 .strm 可用性"
+          desc="到点由应用自己在后台发起，关掉页面也会继续；逐条实拉地址，建议放在 NAS 常开的凌晨"
+          checked={form.autoCheck}
+          onChange={(v) => set('autoCheck', v)}
+        />
+        <Field label="执行频率" hint="本机时间；daily 模式当天错过 6 小时内会自动补跑一次">
+          <div className="space-y-2">
+            <div className="flex gap-2">
+              {([
+                { v: 'daily' as const, label: '按天', desc: '可设多天间隔' },
+                { v: 'interval' as const, label: '按小时', desc: '固定间隔重复' },
+              ]).map((opt) => (
+                <button
+                  key={opt.v}
+                  type="button"
+                  disabled={!form.autoCheck}
+                  onClick={() => set('autoCheckMode', opt.v)}
+                  className={cn(
+                    'flex-1 text-left p-2.5 rounded-md border transition-colors',
+                    form.autoCheckMode === opt.v
+                      ? 'border-accent bg-accent/5'
+                      : 'border-line hover:bg-hover',
+                    !form.autoCheck && 'opacity-50'
+                  )}
+                >
+                  <div className="text-sm">{opt.label}</div>
+                  <div className="text-xs text-faint mt-0.5">{opt.desc}</div>
+                </button>
+              ))}
+            </div>
+
+            {form.autoCheckMode === 'daily' ? (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted">每</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={30}
+                  className="input w-16"
+                  disabled={!form.autoCheck}
+                  value={form.autoCheckEveryDays}
+                  onChange={(e) => set('autoCheckEveryDays', Number.parseInt(e.target.value, 10) || 1)}
+                />
+                <span className="text-muted">天</span>
+                <input
+                  type="time"
+                  className="input w-32"
+                  disabled={!form.autoCheck}
+                  value={form.autoCheckAt}
+                  onChange={(e) => set('autoCheckAt', e.target.value || '03:00')}
+                />
+                <span className="text-muted">执行</span>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-2 text-sm">
+                <span className="text-muted">每</span>
+                <input
+                  type="number"
+                  min={1}
+                  max={168}
+                  className="input w-20"
+                  disabled={!form.autoCheck}
+                  value={form.autoCheckEveryHours}
+                  onChange={(e) => set('autoCheckEveryHours', Number.parseInt(e.target.value, 10) || 1)}
+                />
+                <span className="text-muted">小时执行一次（从上次开始算）</span>
+              </div>
+            )}
+          </div>
+        </Field>
+        <Toggle
+          label="检查出失效后自动回源修复"
+          desc="只处理失效文件，可用的不动；按生成任务记录回源重取最新播放地址"
+          checked={form.autoFix}
+          onChange={(v) => set('autoFix', v)}
+        />
+
+        <div className="text-xs text-faint space-y-1">
+          <div>
+            下次执行：
+            <b className="text-content">
+              {auto?.enabled && auto.nextAt ? formatNextRun(auto.nextAt) : '未开启'}
+            </b>
+          </div>
+          <div>
+            上次执行：
+            {auto?.lastRunAt ? formatRelativeTime(auto.lastRunAt) : '从未执行'}
+            {auto?.lastResult ? ` · ${auto.lastResult}` : ''}
+          </div>
+        </div>
+
+        <button
+          className="btn-sm btn-secondary"
+          disabled={autoRunning || !!activeJob}
+          onClick={() => void runAutoNow()}
+        >
+          {autoRunning || activeJob ? <Spinner size="sm" /> : null}
+          {activeJob ? '检查进行中…' : '立即检查一次'}
+        </button>
+
+        {activeJob && (
+          <StrmRepairProgress
+            job={activeJob}
+            onChanged={() => {
+              void jobsQuery.refetch();
+              void autoQuery.refetch();
+            }}
+          />
+        )}
+
+        <p className="text-xs text-faint leading-relaxed">
+          与「媒体库文件 → 检查并修复」同一套逻辑：结构修复不联网，验证与回源修复会联网。
+          手动检查过一次后，当天的定时任务不再重复执行。
+        </p>
       </Section>
 
       <button className="btn-primary" disabled={saving} onClick={() => void save()}>

@@ -4,9 +4,10 @@ import type { SearchResponse, SearchStreamEvent, SourceSearchOutcome, VideoDetai
 import type {
   CatalogClass,
   CatalogVideo,
+  StrmAutoSummary,
   StrmConfig,
   StrmFileEntry,
-  StrmRepairResult,
+  StrmJobView,
   StrmTask,
 } from './strm/types';
 
@@ -411,13 +412,55 @@ export const api = {
       stats: { strmCount: number; totalSize: number };
     }>(`/api/strm/files?dir=${encodeURIComponent(dir)}`, { signal }),
 
-  /** 检查 / 修复输出目录里的 .strm 文件 */
+  /** 检查 / 修复输出目录里的 .strm 文件（后台作业，关页面也继续） */
   repairStrmFiles: (body: { repair?: boolean; deep?: boolean; verify?: boolean; maxFiles?: number }) =>
-    request<StrmRepairResult>('/api/strm/files/repair', {
+    request<{ job: StrmJobView; reused: boolean }>('/api/strm/files/repair', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     }),
+
+  /** 作业列表 + 当前正在执行的作业 */
+  strmJobs: (signal?: AbortSignal) =>
+    request<{ jobs: StrmJobView[]; active: StrmJobView | null; now: number }>('/api/strm/jobs', {
+      signal,
+    }),
+
+  /** 单个作业（进度轮询用） */
+  strmJob: (id: string, signal?: AbortSignal) =>
+    request<{ job: StrmJobView; now: number }>(`/api/strm/jobs?id=${encodeURIComponent(id)}`, {
+      signal,
+    }),
+
+  /** 创建并启动检查作业；已有作业在跑时返回 reused=true */
+  createStrmJob: (body: { repair?: boolean; deep?: boolean; verify?: boolean }) =>
+    request<{ job: StrmJobView; reused: boolean }>('/api/strm/jobs', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    }),
+
+  /** 作业控制：暂停 / 继续 / 取消 */
+  controlStrmJob: (id: string, action: 'pause' | 'resume' | 'cancel') =>
+    request<{ ok: boolean; job: StrmJobView | null }>(`/api/strm/jobs/${encodeURIComponent(id)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action }),
+    }),
+
+  /** 定时检查的状态摘要：开关、频率、下次执行、上次结果 */
+  strmAuto: (signal?: AbortSignal) => request<StrmAutoSummary>('/api/strm/auto', { signal }),
+
+  /** 立即按自动任务的方式执行一次（后台跑，结果靠 strmAuto 轮询） */
+  runStrmAuto: () =>
+    request<{ ok: boolean; reason: string; started: boolean; summary: StrmAutoSummary }>(
+      '/api/strm/auto',
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'run' }),
+      }
+    ),
 };
 
 export interface SearchFailure {

@@ -15,6 +15,12 @@ function config(overrides: Partial<StrmConfig> = {}): StrmConfig {
     concurrency: 2,
     maxEpisodes: 0,
     verifyAfterGenerate: false,
+    autoCheck: false,
+    autoCheckMode: 'daily',
+    autoCheckAt: '03:00',
+    autoCheckEveryDays: 1,
+    autoCheckEveryHours: 6,
+    autoFix: true,
     ...overrides,
   };
 }

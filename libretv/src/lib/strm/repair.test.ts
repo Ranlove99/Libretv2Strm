@@ -30,6 +30,12 @@ function cfg(outputDir: string, publicBaseUrl = 'http://192.168.1.10:8099'): Str
     concurrency: 2,
     maxEpisodes: 0,
     verifyAfterGenerate: true,
+    autoCheck: false,
+    autoCheckMode: 'daily',
+    autoCheckAt: '03:00',
+    autoCheckEveryDays: 1,
+    autoCheckEveryHours: 6,
+    autoFix: true,
   };
 }
 

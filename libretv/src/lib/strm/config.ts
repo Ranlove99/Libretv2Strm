@@ -8,7 +8,7 @@ import type { StrmConfig } from './types';
  *  > TRIM_PKGVAR/strm（fnOS 环境兜底） > 进程工作目录/.data（本地开发）。
  */
 
-export const STRM_CONFIG_VERSION = 2;
+export const STRM_CONFIG_VERSION = 3;
 
 /** 落盘结构：StrmConfig + 配置版本号（用于一次性迁移） */
 interface StoredStrmConfig extends Partial<StrmConfig> {
@@ -53,7 +53,48 @@ export function defaultStrmConfig(): StrmConfig {
     concurrency: 2,
     maxEpisodes: 0,
     verifyAfterGenerate: true,
+    // 定时检查默认关闭：定时任务会逐条实拉地址，用户明确开启后才消耗带宽
+    autoCheck: false,
+    autoCheckMode: 'daily',
+    autoCheckAt: '03:00',
+    autoCheckEveryDays: 1,
+    autoCheckEveryHours: 6,
+    autoFix: true,
   };
+}
+
+/**
+ * 归一化「每天几点」：接受 HH:mm / H:mm / HHmm / 纯小时 等写法，非法值回落到 03:00。
+ * 单独导出是因为自动检查的时段解析、下次执行时间计算都要用同一套规则。
+ */
+export function normalizeHhmm(raw: unknown): string {
+  const fallback = '03:00';
+  if (typeof raw !== 'string') return fallback;
+  const text = raw.trim();
+  let h = Number.NaN;
+  let min = Number.NaN;
+
+  if (/[:：]/.test(text)) {
+    const m = text.match(/^(\d{1,2})\s*[:：]\s*(\d{1,2})$/);
+    if (m) {
+      h = Number(m[1]);
+      min = Number(m[2]);
+    }
+  } else if (/^\d{1,4}$/.test(text)) {
+    if (text.length <= 2) {
+      // 纯小时：7 → 07:00
+      h = Number(text);
+      min = 0;
+    } else {
+      // 紧凑写法：930 → 09:30，0930 → 09:30
+      h = Number(text.slice(0, text.length - 2));
+      min = Number(text.slice(-2));
+    }
+  }
+
+  if (!Number.isFinite(h) || !Number.isFinite(min)) return fallback;
+  if (h < 0 || h > 23 || min < 0 || min > 59) return fallback;
+  return `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}`;
 }
 
 /** 归一化用户提交的配置：裁剪超长字符串、收敛枚举与数值范围 */
@@ -81,6 +122,15 @@ export function normalizeStrmConfig(input: Partial<StrmConfig>): StrmConfig {
   const maxEp = Number.parseInt(String(input.maxEpisodes ?? ''), 10);
   c.maxEpisodes = Number.isFinite(maxEp) ? Math.min(5000, Math.max(0, maxEp)) : 0;
   c.verifyAfterGenerate = input.verifyAfterGenerate !== false;
+  // 定时检查默认关闭，必须显式开启；时刻、间隔与修复开关跟着一起归一化
+  c.autoCheck = input.autoCheck === true;
+  c.autoCheckMode = input.autoCheckMode === 'interval' ? 'interval' : 'daily';
+  c.autoCheckAt = normalizeHhmm(input.autoCheckAt);
+  const days = Number.parseInt(String(input.autoCheckEveryDays ?? ''), 10);
+  c.autoCheckEveryDays = Number.isFinite(days) ? Math.min(30, Math.max(1, days)) : 1;
+  const hours = Number.parseInt(String(input.autoCheckEveryHours ?? ''), 10);
+  c.autoCheckEveryHours = Number.isFinite(hours) ? Math.min(168, Math.max(1, hours)) : 6;
+  c.autoFix = input.autoFix !== false;
   return c;
 }
 

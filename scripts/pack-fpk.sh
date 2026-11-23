@@ -41,11 +41,11 @@ rm -rf "${STAGE}" && mkdir -p "${STAGE}" "${OUT}"
 echo "0) 预检：版本号与构建产物里的功能标记"
 grep -q "\"version\": \"${VERSION}\"" "${LIB}/package.json" \
   || die "libretv/package.json 的 version 不是 ${VERSION}（改完记得重新 build，APP_VERSION 是构建时注入的）"
-for marker in 跳过标记 控制栏自动隐藏 自动刷新周期 从文件导入 检查与修复; do
+for marker in 跳过标记 控制栏自动隐藏 自动刷新周期 从文件导入 检查与修复 自动检查与修复 服务端后台执行; do
   grep -rq "${marker}" "${LIB}/.next/static" \
     || die "构建产物缺「${marker}」——很可能用了旧的 .next"
 done
-echo "   ✅ ${VERSION}，五项功能标记均在产物中"
+echo "   ✅ ${VERSION}，七项功能标记均在产物中"
 
 for ARCH in arm x86; do
   echo ""
@@ -174,13 +174,21 @@ PY
   grep -rq '跳过标记' "${APP}/server/.next/static" || die "包内缺「跳过标记」"
   grep -rq '从文件导入' "${APP}/server/.next/static" || die "包内缺「从文件导入」"
   grep -rq '检查与修复' "${APP}/server/.next/static" || die "包内缺「检查与修复」"
+  grep -rq '自动检查与修复' "${APP}/server/.next/static" || die "包内缺「自动检查与修复」"
+  grep -rq '服务端后台执行' "${APP}/server/.next/static" || die "包内缺「后台作业」文案"
+  [ -f "${APP}/server/.next/server/instrumentation.js" ] \
+    || die "包内缺 instrumentation.js（定时调度器启动钩子）"
+  [ -f "${APP}/server/.next/server/app/api/strm/auto/route.js" ] \
+    || die "包内缺 /api/strm/auto 路由"
+  [ -f "${APP}/server/.next/server/app/api/strm/jobs/route.js" ] \
+    || die "包内缺 /api/strm/jobs 路由"
   [ -s "${APP}/server/builtin-sources.json" ] || die "包内缺内置点播源"
   [ -s "${APP}/server/builtin-live-sources.json" ] || die "包内缺内置直播源"
   grep -q 'builtin-sources.json' "${META}/cmd/main" || die "cmd/main 缺内置源注入逻辑"
   echo "   wizard/ ✅ $(ls "${META}/wizard" | tr '\n' ' ')"
   echo "   运行时 ✅ ${RUNTIME_DIR} (${NODE_MATCH})"
   echo "   内置源 ✅ 点播 $(python3 -c "import json;print(len(json.load(open('${APP}/server/builtin-sources.json'))))") / 直播 $(python3 -c "import json;print(len(json.load(open('${APP}/server/builtin-live-sources.json'))))")"
-  echo "   新功能 ✅ 跳过标记 / 控制栏自动隐藏 / 自动刷新周期 / 从文件导入 / 检查与修复 / 内置源"
+  echo "   新功能 ✅ 跳过标记 / 控制栏自动隐藏 / 自动刷新周期 / 从文件导入 / 检查与修复 / 自动检查与修复（定时）/ 内置源"
   ls -lh "${OUT}/${PKG}-${VERSION}-${ARCH}.fpk"
 done
 

@@ -1,29 +1,16 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '@/lib/client-api';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useToast } from '@/components/toast';
 import { Spinner, EmptyState } from '@/components/states';
 import { Icon } from '@/components/icon';
-import { cn } from '@/lib/utils';
-import type { StrmIssueCode, StrmRepairResult } from '@/lib/strm/types';
+import { StrmRepairProgress } from '@/components/strm-repair-progress';
+import { cn, formatNextRun, formatRelativeTime } from '@/lib/utils';
 
 /** 文件面板：浏览输出目录，统计 strm 数量与体积；检查并修复已生成的 strm */
-
-const ISSUE_LABELS: Record<StrmIssueCode, string> = {
-  empty: '文件为空',
-  'not-url': '不是播放地址',
-  whitespace: '多余空白/BOM',
-  'proxy-missing-sig': '缺签名',
-  'proxy-bad-sig': '签名失效（改过密码）',
-  'proxy-relay-base': '中继域名不可播',
-  'proxy-stale-lan-base': '旧局域网 IP',
-  'proxy-bad-target': '缺上游地址',
-  'direct-relay-host': '直链指向中继',
-  unreadable: '文件读取失败',
-};
 
 function formatBytes(bytes: number): string {
   if (bytes <= 0) return '0 B';
@@ -32,30 +19,58 @@ function formatBytes(bytes: number): string {
   return `${(bytes / 1024 ** i).toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
-/** 检查与修复区块：结构修复默认开，深度修复与验证需显式勾选（都会联网） */
+/**
+ * 检查与修复区块：结构修复默认开，深度修复与验证需显式勾选（都会联网）。
+ * 任务在服务端以作业形式执行：关掉页面、切到别的标签都不会中断，
+ * 回来时读同一份作业，进度接着走。
+ */
 function RepairSection({ onDone }: { onDone: () => void }) {
   const { toast } = useToast();
   const [open, setOpen] = useState(false);
-  const [running, setRunning] = useState(false);
-  const [result, setResult] = useState<StrmRepairResult | null>(null);
+  const [starting, setStarting] = useState(false);
   const [opts, setOpts] = useState({ repair: true, deep: false, verify: false });
 
-  const run = async () => {
-    setRunning(true);
-    try {
-      const r = await api.repairStrmFiles(opts);
-      setResult(r);
-      const changed = r.fixed + r.deepFixed;
-      const bad = r.unfixable + r.verifyFailed;
-      toast(
-        `检查 ${r.scanned} 个：修复 ${changed} 个，待处理 ${bad} 个`,
-        bad > 0 ? 'error' : 'success'
-      );
+  // 作业状态：运行中每 1.2 秒刷新一次，跑完自动停下
+  const jobsQuery = useQuery({
+    queryKey: ['strm-jobs'],
+    queryFn: ({ signal }) => api.strmJobs(signal as unknown as AbortSignal),
+    refetchInterval: (query) => (query.state.data?.active ? 1200 : false),
+  });
+  const active = jobsQuery.data?.active ?? null;
+  const latest = jobsQuery.data?.jobs?.[0] ?? null;
+  const shown = active ?? latest;
+
+  // 定时任务状态（与设置面板共用同一份缓存）：让用户在这里就知道「多久自动跑一次」
+  const autoQuery = useQuery({
+    queryKey: ['strm-auto'],
+    queryFn: ({ signal }) => api.strmAuto(signal as unknown as AbortSignal),
+    staleTime: 60 * 1000,
+    refetchInterval: (query) => (query.state.data?.activeJob ? 3000 : false),
+  });
+  const auto = autoQuery.data;
+
+  // 作业完成时刷新一次文件列表（只对同一个作业触发一次）
+  const doneRef = useRef('');
+  useEffect(() => {
+    if (latest && latest.status === 'done' && doneRef.current !== latest.id) {
+      doneRef.current = latest.id;
       onDone();
+    }
+  }, [latest, onDone]);
+
+  const start = async () => {
+    setStarting(true);
+    try {
+      const r = await api.createStrmJob(opts);
+      toast(
+        r.reused ? '已有检查在进行，直接看下面的进度' : '已开始检查，关掉页面也会继续',
+        'success'
+      );
+      await jobsQuery.refetch();
     } catch (err) {
-      toast(err instanceof Error ? err.message : '检查失败', 'error');
+      toast(err instanceof Error ? err.message : '启动失败', 'error');
     } finally {
-      setRunning(false);
+      setStarting(false);
     }
   };
 
@@ -76,7 +91,34 @@ function RepairSection({ onDone }: { onDone: () => void }) {
           <li>结构修复（不联网）：去掉多余空白/BOM、把 FN Connect 中继域名改回可用地址、旧局域网 IP 改回当前地址、重算失效签名。</li>
           <li>深度修复（联网，慢）：地址验证失败时，按生成任务记录回源重取最新播放地址，可救源站换线路导致的失效。</li>
           <li>修复后验证（联网，慢）：逐文件实拉播放地址，确认真的能播。</li>
+          <li>任务在服务端后台执行：关掉页面、切换标签都不会中断；重新进入时接着显示进度，暂停后可从断点继续。</li>
         </ul>
+      )}
+
+      {auto && (
+        <p className="text-xs text-faint leading-relaxed">
+          {auto.activeJob ? (
+            <span className="text-accent">定时检查正在后台执行，进度见下方。</span>
+          ) : auto.enabled ? (
+            <>
+              已开启
+              {auto.mode === 'daily'
+                ? `${auto.everyDays > 1 ? `每 ${auto.everyDays} 天 ` : '每天 '}${auto.at}`
+                : `每 ${auto.everyHours} 小时`}
+              自动检查{auto.fix ? '并自动回源修复' : ''}，下次
+              {auto.nextAt ? formatNextRun(auto.nextAt) : '—'}。
+            </>
+          ) : (
+            '未开启定时检查，可在「设置 → 自动检查与修复」中开启。'
+          )}
+          {auto.lastRunAt && !auto.activeJob ? (
+            <span>
+              {' '}
+              上次 {formatRelativeTime(auto.lastRunAt)}
+              {auto.lastResult ? `：${auto.lastResult}` : ''}
+            </span>
+          ) : null}
+        </p>
       )}
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
@@ -92,46 +134,17 @@ function RepairSection({ onDone }: { onDone: () => void }) {
           <input type="checkbox" checked={opts.verify} onChange={() => toggle('verify')} className="accent-accent" />
           修复后验证
         </label>
-        <button className="ml-auto btn-sm btn-primary" disabled={running} onClick={() => void run()}>
-          {running ? <Spinner size="sm" /> : <Icon name="bolt" />}
-          {running ? '检查中…' : opts.repair ? '检查并修复' : '仅检查'}
+        <button
+          className="ml-auto btn-sm btn-primary"
+          disabled={starting || !!active}
+          onClick={() => void start()}
+        >
+          {starting || active ? <Spinner size="sm" /> : <Icon name="bolt" />}
+          {active ? '检查中…' : starting ? '启动中…' : opts.repair ? '检查并修复' : '仅检查'}
         </button>
       </div>
 
-      {result && (
-        <div className="space-y-2 pt-1">
-          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
-            <span>扫描 <b className="text-content">{result.scanned}</b></span>
-            <span>正常 <b className="text-content">{result.ok}</b></span>
-            <span>结构修复 <b className="text-accent">{result.fixed}</b></span>
-            <span>深度修复 <b className="text-accent">{result.deepFixed}</b></span>
-            <span>待处理 <b className={result.unfixable ? 'text-danger' : 'text-content'}>{result.unfixable}</b></span>
-            {result.pendingRepair > 0 && <span>可修未改 <b className="text-content">{result.pendingRepair}</b></span>}
-            {opts.verify && <span>验证失败 <b className={result.verifyFailed ? 'text-danger' : 'text-content'}>{result.verifyFailed}</b></span>}
-            {result.truncated && <span className="text-danger">已达扫描上限，部分文件未处理</span>}
-          </div>
-
-          {result.details.length > 0 && (
-            <ul className="max-h-64 overflow-auto divide-y divide-line rounded-md border border-line">
-              {result.details.map((d) => (
-                <li key={d.file} className="px-3 py-2 text-xs space-y-0.5">
-                  <div className="flex items-center gap-2">
-                    <span className={cn('shrink-0', d.deepFixed || d.fixed ? 'text-success' : 'text-danger')}>
-                      {d.deepFixed ? '已深度修复' : d.fixed ? '已修复' : '未修复'}
-                    </span>
-                    <span className="truncate text-content" title={d.file}>{d.file}</span>
-                  </div>
-                  <div className="text-faint">
-                    {d.issues.map((c) => ISSUE_LABELS[c]).join('、')}
-                    {d.reason ? ` — ${d.reason}` : ''}
-                    {d.verify === 'fail' && d.verifyError ? ` — 验证：${d.verifyError}` : ''}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
+      <StrmRepairProgress job={shown} onChanged={() => void jobsQuery.refetch()} />
     </div>
   );
 }

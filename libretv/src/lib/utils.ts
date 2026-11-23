@@ -29,6 +29,18 @@ export function formatDisableTtl(ms: number): string {
   return minutes >= 60 ? `${Math.round(minutes / 60)} 小时` : `${minutes} 分钟`;
 }
 
+/** 下次执行时刻的友好文案：今天 / 明天 HH:mm，更远则带上月日 */
+export function formatNextRun(timestamp: number, now: number = Date.now()): string {
+  const d = new Date(timestamp);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const hm = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  const sameDay = (a: Date, b: Date) =>
+    a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+  if (sameDay(d, new Date(now))) return `今天 ${hm}`;
+  if (sameDay(d, new Date(now + 86_400_000))) return `明天 ${hm}`;
+  return `${d.getMonth() + 1}月${d.getDate()}日 ${hm}`;
+}
+
 /**
  * 封面图加载地址：direct 直连 / proxy 内置代理 / custom 自定义模板（{url} 占位符或直接拼接）。
  * 默认 proxy（内置代理），规避豆瓣防盗链与部分采集站图床直连失败。
